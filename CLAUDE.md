@@ -303,10 +303,12 @@ tests.
   names. Review every fixture before committing it.
 - **No live HTTP in unit tests.** pytest-socket blocks the network; fake HTTP
   with `responses`.
-- **Database and API tests** run against real PostgreSQL
-  (`TEST_DATABASE_URL`), each in a transaction rolled back afterwards. They
-  skip when no database is reachable, so a green run must show them passing,
-  not skipped.
+- **Database and API tests** run against real PostgreSQL at
+  `TEST_DATABASE_URL`, each in a transaction rolled back afterwards. The
+  fixtures drop every table, so they never fall back to `DATABASE_URL`. They
+  skip when no database is reachable, so a green local run must show them
+  passing, not skipped. With `REQUIRE_DATABASE=1` (set in CI) a missing
+  database fails the run instead.
 - **Live checks** against real boards are marked `@pytest.mark.live` and
   excluded by default.
 
@@ -323,7 +325,10 @@ a milestone is closed, when a `v*` tag is pushed (one per milestone, e.g.
 3. **docker:** `docker compose build`.
 4. **secrets:** gitleaks.
 
-A red milestone run gets an issue, and the release waits for it. `main` needs
+A red milestone run gets an issue, and the release waits for it. GitHub only
+offers a manual run for workflows on the default branch, so a change to
+`ci.yml` is first run by hand right after it merges:
+`gh workflow run ci.yml --ref main`. `main` needs
 a PR and a linear history; there are no required status checks, since CI
 doesn't run per PR.
 

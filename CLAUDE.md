@@ -160,8 +160,10 @@ backend/src/job_radar/
     matching.py       job profiles (title terms) and presets
     work_type.py      onsite / hybrid / remote / unknown
     filters.py        posting_key, PostingView, the dashboard filter pipeline
+    applications_repo.py  applications and their status history
     boards_repo.py, profiles_repo.py, settings_repo.py, marks_repo.py
-  blueprints/         /api/postings, /api/boards, /api/profiles, /api/settings, /api/marks, /api/health
+  blueprints/         /api/postings, /api/boards, /api/profiles, /api/settings, /api/marks,
+                      /api/applications, /api/health
 frontend/src/
   redux/api.ts        RTK Query endpoints
   datatypes.ts        mirrors the API's JSON (snake_case)
@@ -237,6 +239,14 @@ user's settings, so changing a setting never needs a rescrape.
 - `posting_marks`: hidden / not interested, by `posting_key`.
 - `job_profiles`: name, include/exclude/seniority terms, advanced, position,
   enabled.
+- `applications`: jobs being pursued, copied from a posting (`posting_key`,
+  unique when set) or entered by hand. They copy the posting's fields, so they
+  outlive the posting and its board. `status` is one of saved, applied,
+  screening, interviewing, offer, accepted, rejected, withdrawn, ghosted;
+  `applied_at` is the first time it became applied.
+- `application_events`: one row per status change (from, to, note, time).
+  The status only changes by adding an event, so the history always explains
+  it; creation records the first event with no `from_status`.
 - `app_settings`: one row holding the location rule, default filters, scrape
   interval and visit timestamps. "New since last visit" means first seen after
   `previous_visit_at`.
@@ -257,6 +267,9 @@ user's settings, so changing a setting never needs a rescrape.
 | GET | `/api/profiles/presets` | Starting points |
 | GET / PUT | `/api/settings` | Location rule, default filters, scrape interval |
 | GET / POST / DELETE | `/api/marks` | Hidden postings; DELETE takes `?key=<posting_key>` |
+| GET / POST | `/api/applications` | List (`status`, repeatable) or create, by hand or from `posting_key`; 409 if that posting already has one |
+| GET / PATCH / DELETE | `/api/applications/<id>` | One application with its events; PATCH edits fields and notes, never the status |
+| POST | `/api/applications/<id>/events` | Change the status: `{to_status, note}` |
 | GET | `/api/health` | Checks the database; used by the compose healthcheck |
 
 JSON stays in snake_case end to end, and `frontend/src/datatypes.ts` mirrors it

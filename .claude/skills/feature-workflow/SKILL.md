@@ -38,7 +38,7 @@ your session uses.
 
 ```bash
 cd backend && .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy src
-cd backend && TEST_DATABASE_URL=<url> .venv/bin/pytest -q -rs --cov=job_radar   # 0 skipped
+cd backend && TEST_DATABASE_URL=<url> TEST_REDIS_URL=<url> .venv/bin/pytest -q -rs --cov=job_radar   # 0 skipped
 cd frontend && yarn lint && yarn typecheck && yarn test && yarn build
 pre-commit run --all-files
 "$JOB_RADAR_PRIVATE_SCAN"   # if set: the owner's private personal-data scan

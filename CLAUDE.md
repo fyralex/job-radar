@@ -129,14 +129,14 @@ in the module's docstring.
 
 - **Backend:** Python 3.11, Flask 3 app factory, gunicorn, SQLAlchemy 2.0
   (typed ORM) with Alembic, psycopg 3, PostgreSQL 16, `requests`,
-  BeautifulSoup. Redis 7 arrives in its own PR (see "Roadmap").
+  BeautifulSoup, Redis 7 (redis-py) for locks shared across processes.
 - **Frontend:** React 19, TypeScript in strict mode, Vite, Redux Toolkit Query.
 - **Tests:** pytest (pytest-socket blocks the network, `responses` fakes HTTP,
   pytest-cov); Vitest with `@testing-library/react` 16 and jsdom.
 - **Tooling:** ruff (lint and format), mypy `--strict`, ESLint
   (typescript-eslint strict), `tsc --noEmit`, gitleaks, pre-commit.
 - **Runtime:** Docker Compose with `frontend` (nginx serving the build and
-  proxying `/api`), `backend`, `worker` and `postgres`, each with a
+  proxying `/api`), `backend`, `worker`, `postgres` and `redis`, each with a
   healthcheck.
 
 ## Architecture
@@ -145,6 +145,7 @@ in the module's docstring.
 backend/src/job_radar/
   app.py              create_app(): blueprints, DB session per request, errors -> JSON
   config.py           typed settings from environment variables
+  coordination.py     run and per-board locks: Redis (SET NX PX + token) or in-process
   http.py             HttpClient: honest UA, robots.txt, per-host throttle, retries
   models.py           SQLAlchemy models (migrations in backend/migrations)
   worker.py           scheduled scraper (python -m job_radar.worker)
@@ -276,7 +277,7 @@ user's settings, so changing a setting never needs a rescrape.
 | GET / POST | `/api/applications` | List (`status`, repeatable) or create, by hand or from `posting_key`; 409 if that posting already has one. POST takes `status`, `note` (the first event's note) and `notes` (the application's own notes); with `posting_key` the title, org, location and URL come from the posting, `source` is the platform name, and those fields are ignored |
 | GET / PATCH / DELETE | `/api/applications/<id>` | One application with its events; PATCH edits fields and notes, never the status |
 | POST | `/api/applications/<id>/events` | Change the status: `{to_status, note}` |
-| GET | `/api/health` | Checks the database; used by the compose healthcheck |
+| GET | `/api/health` | Checks the database and Redis (`"not configured"` without `REDIS_URL`); 503 if either is down, which marks the backend container unhealthy. Used by the compose healthcheck |
 
 JSON stays in snake_case end to end, and `frontend/src/datatypes.ts` mirrors it
 exactly. The API has one consumer, so there's no camelCase layer.
@@ -285,7 +286,7 @@ exactly. The API has one consumer, so there's no camelCase layer.
 
 | File | In git? | Holds |
 |---|---|---|
-| `.env.example` | yes | Placeholders: Postgres credentials, `CONTACT_URL`, `HTTP_PORT`, `SCRAPE_WORKERS`, `CORS_ORIGINS` |
+| `.env.example` | yes | Placeholders: Postgres credentials, `REDIS_URL` (compose sets its own), `CONTACT_URL`, `HTTP_PORT`, `SCRAPE_WORKERS`, `CORS_ORIGINS` |
 | `.env` | **no** | Real values |
 | `config/boards.example.yaml` | yes | Demo boards, at least one per platform |
 | `config/boards.yaml` | **no** | The owner's own board list, imported with `flask boards import` |
@@ -303,7 +304,7 @@ docker compose exec backend flask --app job_radar.wsgi scrape
 
 # Local checks (run all before opening a PR)
 cd backend && ruff check . && ruff format --check . && mypy src
-cd backend && TEST_DATABASE_URL=postgresql+psycopg://... pytest -q --cov=job_radar
+cd backend && TEST_DATABASE_URL=postgresql+psycopg://... TEST_REDIS_URL=redis://... pytest -q -rs --cov=job_radar
 cd frontend && yarn lint && yarn typecheck && yarn test && yarn build
 pre-commit run --all-files                 # includes gitleaks
 ```
@@ -328,6 +329,9 @@ tests.
   skip when no database is reachable, so a green local run must show them
   passing, not skipped. With `REQUIRE_DATABASE=1` (set in CI) a missing
   database fails the run instead.
+- **Redis tests** (`@pytest.mark.redis`) use a real Redis at `TEST_REDIS_URL`,
+  flushed before and after each test, so never `REDIS_URL`. They skip the same
+  way, and `REQUIRE_REDIS=1` (set in CI) makes a missing Redis fail the run.
 - **Live checks** against real boards are marked `@pytest.mark.live` and
   excluded by default.
 
@@ -338,7 +342,7 @@ a milestone is closed, when a `v*` tag is pushed (one per milestone, e.g.
 `v0.1.0`), or by hand (`workflow_dispatch`). It runs:
 
 1. **backend:** ruff, mypy, `alembic upgrade head` on a fresh database, pytest
-   with coverage, against a `postgres:16` service container.
+   with coverage, against `postgres:16` and `redis:7` service containers.
 2. **frontend:** `yarn install --frozen-lockfile`, lint, typecheck, Vitest,
    build.
 3. **docker:** `docker compose build`.
@@ -357,8 +361,8 @@ Milestone `v0.1`, one PR each:
 1. Milestone CI, issue and PR templates.
 2. Applications (done: #2, #8, #9): status pipeline, status history with
    notes, manual entries, and an "Applied" button on postings.
-3. Redis: shared per-board cache and lock, a per-host rate limiter shared
-   across processes, and a scheduler lock.
+3. Redis: run and per-board locks and health (#3); a per-host rate limiter
+   shared across processes and a per-board result cache (#16).
 4. `scrape_runs` history and a health column for boards.
 5. README with a screenshot, architecture diagram and quick start.
 

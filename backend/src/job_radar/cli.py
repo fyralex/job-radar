@@ -57,7 +57,10 @@ def register_cli(app: Flask) -> None:
 
         app_state = app.extensions[EXTENSION]
         summary = run_scrape(
-            app_state.sessions, app_state.config.contact_url, app_state.config.scrape_workers
+            app_state.sessions,
+            app_state.config.contact_url,
+            app_state.config.scrape_workers,
+            locks=app_state.locks,
         )
         if summary is None:
             raise click.ClickException("a scrape is already running")

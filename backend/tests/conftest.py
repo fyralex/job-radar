@@ -6,6 +6,9 @@ TEST_DATABASE_URL (never DATABASE_URL: the fixtures drop every table). Each
 test runs in a transaction that is rolled back, so tests never see each
 other's rows. With REQUIRE_DATABASE set (CI), a missing database fails the run
 instead of skipping.
+
+Redis tests work the same way with TEST_REDIS_URL (never REDIS_URL: the fixture
+flushes the database) and REQUIRE_REDIS.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 import pytest
+import redis
 from flask import Flask
 from flask.testing import FlaskClient
 from sqlalchemy import Connection, Engine, create_engine
@@ -63,6 +67,29 @@ def _no_database(reason: str) -> NoReturn:
     if os.environ.get("REQUIRE_DATABASE"):
         pytest.fail(f"REQUIRE_DATABASE is set but {reason}")
     pytest.skip(reason)
+
+
+def _no_redis(reason: str) -> NoReturn:
+    if os.environ.get("REQUIRE_REDIS"):
+        pytest.fail(f"REQUIRE_REDIS is set but {reason}")
+    pytest.skip(reason)
+
+
+@pytest.fixture
+def redis_url() -> Iterator[str]:
+    """A real Redis at TEST_REDIS_URL, emptied before and after each test."""
+    url = os.environ.get("TEST_REDIS_URL")
+    if not url:
+        _no_redis("TEST_REDIS_URL is not set")
+    client = redis.Redis.from_url(url, socket_connect_timeout=2, socket_timeout=2)
+    try:
+        client.ping()
+    except redis.RedisError as exc:
+        _no_redis(f"Redis unreachable: {exc}")
+    client.flushdb()
+    yield url
+    client.flushdb()
+    client.close()
 
 
 @pytest.fixture(scope="session")

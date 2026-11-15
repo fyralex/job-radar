@@ -40,19 +40,31 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt   # fi
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy src
 ```
 
-Database tests need PostgreSQL. A throwaway one:
+Database tests need PostgreSQL and Redis tests need Redis. Throwaway ones:
 
 ```bash
 docker run -d --rm --name jobradar-testdb -e POSTGRES_USER=jobradar \
   -e POSTGRES_PASSWORD=jobradar -e POSTGRES_DB=jobradar -p 127.0.0.1:55432:5432 postgres:16-alpine
+docker run -d --rm --name jobradar-testredis -p 127.0.0.1:56379:6379 redis:7-alpine
 TEST_DATABASE_URL=postgresql+psycopg://jobradar:jobradar@127.0.0.1:55432/jobradar \
+TEST_REDIS_URL=redis://127.0.0.1:56379/0 REQUIRE_DATABASE=1 REQUIRE_REDIS=1 \
   .venv/bin/pytest -q -rs --cov=job_radar
-docker stop jobradar-testdb
+docker stop jobradar-testdb jobradar-testredis
 ```
 
-`-rs` lists skipped tests. Database tests skip when no database is reachable,
-so a passing run must show 0 skipped. The network is blocked in tests
-(pytest-socket); localhost is allowed for Postgres.
+`-rs` lists skipped tests. Database and Redis tests skip when their service is
+unreachable, so a passing run must show 0 skipped; the `REQUIRE_*` variables
+make a missing service fail instead. The network is blocked in tests
+(pytest-socket); localhost is allowed.
+
+To try a change in the real app without touching your own stack, run a
+separate compose project with its own volumes, and leave out the worker if
+you seed postings by hand (it would scrape and close them):
+
+```bash
+HTTP_PORT=18090 docker compose -p jobradar-review up -d --build postgres redis backend frontend
+HTTP_PORT=18090 docker compose -p jobradar-review down -v   # removes its database too
+```
 
 ## Frontend checks
 
@@ -67,6 +79,8 @@ yarn dev    # dev server on :5173, proxies /api to a backend on :8000
 
 ```bash
 pre-commit install && pre-commit run --all-files   # ruff, whitespace, gitleaks (via Docker)
+# If pre-commit says InvalidManifestError ("Expected one of commit, ... got: 'pre-commit'"),
+# a system pre-commit older than 3.2 is on PATH; use backend/.venv/bin/pre-commit instead.
 ```
 
 If `JOB_RADAR_PRIVATE_SCAN` is set, run it too. It's the owner's private scan

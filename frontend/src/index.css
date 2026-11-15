@@ -115,3 +115,5 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .timeline { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
 .timeline-note { color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .card-title { overflow-wrap: anywhere; }
+.posting-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.apply-button { font-size: 0.85rem; padding: 2px 8px; }

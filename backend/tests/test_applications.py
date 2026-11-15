@@ -7,10 +7,12 @@ from flask.testing import FlaskClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from job_radar.models import ApplicationEventRow, BoardRow, utcnow
+from job_radar.models import ApplicationEventRow, ApplicationRow, BoardRow, utcnow
+from job_radar.services import applications_repo
 from job_radar.services.applications_repo import (
     STATUSES,
     ApplicationExistsError,
+    applied_posting_keys,
     change_status,
     create_application,
     update_application,
@@ -76,6 +78,26 @@ class TestRepo:
         create_application(session, {"posting_key": key})
         with pytest.raises(ApplicationExistsError):
             create_application(session, {"posting_key": key})
+
+    def test_racing_create_is_a_conflict(
+        self, session: Session, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Two requests both pass the existence check; the second hits the
+        # unique constraint, which must still read as "already exists".
+        key = _seed_posting(session)
+        monkeypatch.setattr(applications_repo, "_has_application", lambda _s, _k: False)
+        create_application(session, {"posting_key": key})
+        with pytest.raises(ApplicationExistsError):
+            create_application(session, {"posting_key": key})
+        # The savepoint rolled back only the failed insert.
+        assert session.scalar(select(func.count()).select_from(ApplicationRow)) == 1
+
+    def test_applied_posting_keys(self, session: Session) -> None:
+        key = _seed_posting(session)
+        create_application(session, MANUAL)
+        assert applied_posting_keys(session) == set()
+        create_application(session, {"posting_key": key})
+        assert applied_posting_keys(session) == {key}
 
     def test_unknown_posting(self, session: Session) -> None:
         with pytest.raises(ValueError, match="no posting"):
@@ -204,6 +226,30 @@ class TestApi:
         response = getattr(api, method)(path, json=body)
         assert response.status_code == status
         assert isinstance(response.json["error"], str)
+
+    def test_bad_patch_changes_nothing(self, api: FlaskClient) -> None:
+        created = _create(api, **MANUAL)
+        for body in (
+            {"notes": "new notes", "url": "javascript:alert(1)"},
+            {"notes": "new notes", "title": ""},
+            {"notes": "new notes", "status": "offer"},
+        ):
+            response = api.patch(f"/api/applications/{created['id']}", json=body)
+            assert response.status_code == 400
+            assert isinstance(response.json["error"], str)
+        after = api.get(f"/api/applications/{created['id']}").json
+        assert after == created
+
+    def test_applied_postings_leave_the_postings_list(
+        self, api: FlaskClient, session: Session
+    ) -> None:
+        key = _seed_posting(session)
+        assert [p["posting_key"] for p in api.get("/api/postings").json["postings"]] == [key]
+        app_id = _create(api, posting_key=key, status="applied")["id"]
+        assert api.get("/api/postings").json["postings"] == []
+        # Deleting the application brings the posting back.
+        api.delete(f"/api/applications/{app_id}")
+        assert [p["posting_key"] for p in api.get("/api/postings").json["postings"]] == [key]
 
     def test_bad_event(self, api: FlaskClient) -> None:
         app_id = _create(api, **MANUAL)["id"]

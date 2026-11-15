@@ -14,6 +14,7 @@ import {errorText} from '../errors';
 import {useLocalPreference} from '../hooks/useLocalPreference';
 import {
   useAddMarkMutation,
+  useApplyToPostingMutation,
   useGetPostingsQuery,
   useGetProfilesQuery,
   useGetSettingsQuery,
@@ -82,6 +83,8 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
   });
   const [refresh, refreshState] = useRefreshMutation();
   const [addMark] = useAddMarkMutation();
+  const [applyToPosting] = useApplyToPostingMutation();
+  const [applyMessage, setApplyMessage] = useState<{text: string; error: boolean} | null>(null);
 
   // While a scrape runs, poll so new results appear when it finishes.
   const refreshing = postings.data?.refreshing ?? false;
@@ -105,6 +108,14 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
   const newCount = visible.filter((p) => p.is_new).length;
 
   const onMark = (posting: Posting, status: MarkStatus) => void addMark({posting, status});
+  const onApply = async (posting: Posting) => {
+    const result = await applyToPosting(posting.posting_key);
+    setApplyMessage(
+      result.error
+        ? {text: `Couldn’t add “${posting.title}”: ${errorText(result.error)}`, error: true}
+        : {text: `Added “${posting.title}” to Applications as Applied.`, error: false},
+    );
+  };
 
   if (!profilesLoading && profiles.length === 0) {
     return (
@@ -220,7 +231,12 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
         </details>
       )}
 
-      <PostingsList postings={visible} onMark={onMark} />
+      {applyMessage && (
+        <p className={applyMessage.error ? 'error' : 'ok'} role="status">
+          {applyMessage.text}
+        </p>
+      )}
+      <PostingsList postings={visible} onMark={onMark} onApply={(p) => void onApply(p)} />
       <MarksPanel />
     </section>
   );

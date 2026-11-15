@@ -17,6 +17,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from job_radar.models import ApplicationEventRow, ApplicationRow, PostingRow, utcnow
@@ -111,6 +112,17 @@ def list_applications(session: Session, statuses: Sequence[str] = ()) -> list[Ap
     return list(session.scalars(query))
 
 
+def applied_posting_keys(session: Session) -> set[str]:
+    """Posting keys that have an application; the Postings tab hides them."""
+    query = select(ApplicationRow.posting_key).where(ApplicationRow.posting_key.is_not(None))
+    return {key for key in session.scalars(query) if key}
+
+
+def _has_application(session: Session, key: str) -> bool:
+    query = select(ApplicationRow.id).where(ApplicationRow.posting_key == key)
+    return session.scalar(query) is not None
+
+
 def create_application(session: Session, data: dict[str, Any]) -> ApplicationRow:
     """Create from `posting_key` (copying the posting) or from the given fields.
 
@@ -125,7 +137,7 @@ def create_application(session: Session, data: dict[str, Any]) -> ApplicationRow
         posting = session.scalar(select(PostingRow).where(PostingRow.posting_key == key))
         if posting is None:
             raise ValueError("no posting with that posting_key")
-        if session.scalar(select(ApplicationRow.id).where(ApplicationRow.posting_key == key)):
+        if _has_application(session, key):
             raise ApplicationExistsError(key)
         platform = PLATFORMS.get(posting.board.platform)
         row = ApplicationRow(
@@ -142,8 +154,17 @@ def create_application(session: Session, data: dict[str, Any]) -> ApplicationRow
     now = utcnow()
     row.created_at = now
     _add_event(row, None, status, note, now)
-    session.add(row)
-    session.flush()
+    # The check above can race with another request for the same posting (a
+    # double-click on "Applied"). The unique constraint is the real guard; a
+    # savepoint keeps the request's session usable when it fires.
+    try:
+        with session.begin_nested():
+            session.add(row)
+            session.flush()
+    except IntegrityError as exc:
+        if row.posting_key is None:
+            raise
+        raise ApplicationExistsError(row.posting_key) from exc
     return row
 
 

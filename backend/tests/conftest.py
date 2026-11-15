@@ -14,7 +14,7 @@ import json
 import os
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import pytest
 from flask import Flask
@@ -57,7 +57,7 @@ def client_no_wait() -> HttpClient:
     )
 
 
-def _no_database(reason: str) -> None:
+def _no_database(reason: str) -> NoReturn:
     """Skip database tests locally; fail when REQUIRE_DATABASE is set (CI), so
     a misconfigured run can't pass by skipping them."""
     if os.environ.get("REQUIRE_DATABASE"):
@@ -71,7 +71,6 @@ def engine() -> Iterator[Engine]:
     url = os.environ.get("TEST_DATABASE_URL")
     if not url:
         _no_database("TEST_DATABASE_URL is not set")
-        raise AssertionError("unreachable")
     engine = create_engine(url)
     try:
         with engine.connect():

@@ -131,3 +131,51 @@ class AppSettingsRow(Base):
     last_visit_at: Mapped[datetime | None] = mapped_column(default=None)
     previous_visit_at: Mapped[datetime | None] = mapped_column(default=None)
     last_full_scrape_at: Mapped[datetime | None] = mapped_column(default=None)
+
+
+class ApplicationRow(Base):
+    """A job the user is pursuing. Copied from a posting or entered by hand, so
+    it outlives the posting and its board. Status changes go through
+    `application_events`, never a bare update, so the history stays complete."""
+
+    __tablename__ = "applications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Set when copied from a posting; one application per posting.
+    posting_key: Mapped[str | None] = mapped_column(String(1200), unique=True, default=None)
+    title: Mapped[str] = mapped_column(String(500))
+    org: Mapped[str] = mapped_column(String(200))
+    location: Mapped[str | None] = mapped_column(Text, default=None)
+    url: Mapped[str] = mapped_column(Text, default="")
+    # Where the job was found, e.g. "Greenhouse", "referral". Free text.
+    source: Mapped[str] = mapped_column(String(100), default="")
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    applied_at: Mapped[datetime | None] = mapped_column(default=None)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    events: Mapped[list[ApplicationEventRow]] = relationship(
+        back_populates="application",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ApplicationEventRow.id",
+    )
+
+
+class ApplicationEventRow(Base):
+    """One status change. `from_status` is None for the event that created the
+    application."""
+
+    __tablename__ = "application_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("applications.id", ondelete="CASCADE"), index=True
+    )
+    from_status: Mapped[str | None] = mapped_column(String(20), default=None)
+    to_status: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str] = mapped_column(Text, default="")
+    at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    application: Mapped[ApplicationRow] = relationship(back_populates="events")

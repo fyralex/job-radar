@@ -82,9 +82,17 @@ def create_app(
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
             return response
 
-    from job_radar.blueprints import boards, health, marks, postings, profiles, settings
+    from job_radar.blueprints import (
+        applications,
+        boards,
+        health,
+        marks,
+        postings,
+        profiles,
+        settings,
+    )
 
-    for module in (boards, health, marks, postings, profiles, settings):
+    for module in (applications, boards, health, marks, postings, profiles, settings):
         app.register_blueprint(module.bp)
 
     from job_radar.cli import register_cli

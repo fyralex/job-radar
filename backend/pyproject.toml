@@ -1,0 +1,37 @@
+[project]
+name = "job-radar"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "N", "S", "PL"]
+# PLC0415: the app factory imports blueprints lazily to avoid import cycles.
+ignore = ["PLR0913", "PLR2004", "PLR0911", "PLR0912", "PLC0415"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "PLR2004", "S113"]
+"migrations/**" = ["N999"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+packages = ["job_radar"]
+
+[[tool.mypy.overrides]]
+module = ["responses.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,localhost,::1 -m 'not live'"
+markers = [
+  "live: hits real job boards; excluded by default (run with -m live --force-enable-socket)",
+  "db: needs PostgreSQL (DATABASE_URL); skipped if unreachable",
+]

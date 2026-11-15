@@ -1,0 +1,210 @@
+"""The one HTTP client every source module uses. It enforces the data
+collection policy in CLAUDE.md on every request:
+
+- An honest User-Agent naming this app and, if `CONTACT_URL` is set, where to
+  find it. Never a browser string.
+- robots.txt is checked before every request, cached per host for 24 hours.
+  Fetch rules follow RFC 9309: a 2xx file is parsed with `urllib.robotparser`,
+  any 4xx means there are no rules (allow all), and a 5xx or a network error
+  means "unreachable", so the whole host is treated as disallowed until the
+  next check. (Python's own `RobotFileParser.read()` treats 401/403 as
+  disallow-all, which the RFC doesn't; one public posting API answers its
+  robots.txt with 401.)
+- At most one request per second per host, shared by every thread.
+- 429 and 5xx responses are retried with backoff, honouring `Retry-After`.
+
+A disallowed path or a blocked request raises `BoardFetchError`; the board is
+then reported as failed. Never work around a block.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+import time
+import urllib.robotparser
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
+from urllib.parse import urlsplit
+
+import requests
+
+from job_radar import __version__
+from job_radar.errors import BoardFetchError
+
+logger = logging.getLogger(__name__)
+
+ROBOTS_TTL_SECONDS = 24 * 3600
+MIN_INTERVAL_SECONDS = 1.0
+MAX_RETRIES = 3
+MAX_RETRY_AFTER_SECONDS = 60.0
+DEFAULT_TIMEOUT = 30.0
+
+
+def user_agent(contact_url: str | None) -> str:
+    base = f"job-radar/{__version__}"
+    return f"{base} (+{contact_url})" if contact_url else base
+
+
+@dataclass
+class _Robots:
+    parser: urllib.robotparser.RobotFileParser | None  # None = allow all
+    disallow_all: bool
+    fetched_at: float
+
+
+class RobotsCache:
+    """robots.txt per scheme+host, shared by every client in the process."""
+
+    def __init__(self, ttl: float = ROBOTS_TTL_SECONDS) -> None:
+        self._ttl = ttl
+        self._entries: dict[str, _Robots] = {}
+        self._lock = threading.Lock()
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+
+    def allowed(self, session: requests.Session, url: str, agent: str) -> bool:
+        parts = urlsplit(url)
+        origin = f"{parts.scheme}://{parts.netloc}"
+        with self._lock:
+            entry = self._entries.get(origin)
+        if entry is None or time.monotonic() - entry.fetched_at > self._ttl:
+            entry = self._fetch(session, origin, agent)
+            with self._lock:
+                self._entries[origin] = entry
+        if entry.disallow_all:
+            return False
+        if entry.parser is None:
+            return True
+        return entry.parser.can_fetch(agent, url)
+
+    @staticmethod
+    def _fetch(session: requests.Session, origin: str, agent: str) -> _Robots:
+        now = time.monotonic()
+        try:
+            response = session.get(
+                f"{origin}/robots.txt", headers={"User-Agent": agent}, timeout=DEFAULT_TIMEOUT
+            )
+        except requests.RequestException as exc:
+            logger.warning("robots.txt unreachable for %s: %s", origin, exc)
+            return _Robots(None, True, now)
+        if 400 <= response.status_code < 500:
+            return _Robots(None, False, now)
+        if response.status_code >= 500:
+            return _Robots(None, True, now)
+        parser = urllib.robotparser.RobotFileParser()
+        parser.parse(response.text.splitlines())
+        return _Robots(parser, False, now)
+
+
+class HostThrottle:
+    """At most one request per `interval` seconds per host, across threads."""
+
+    def __init__(
+        self,
+        interval: float = MIN_INTERVAL_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._interval = interval
+        self._clock = clock
+        self._sleep = sleep
+        self._next_slot: dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def wait(self, host: str) -> None:
+        with self._lock:
+            now = self._clock()
+            slot = max(now, self._next_slot.get(host, now))
+            self._next_slot[host] = slot + self._interval
+        if slot > now:
+            self._sleep(slot - now)
+
+
+ROBOTS = RobotsCache()
+THROTTLE = HostThrottle()
+
+
+def _retry_after(response: requests.Response, attempt: int) -> float:
+    header = response.headers.get("Retry-After")
+    if header:
+        try:
+            return min(float(header), MAX_RETRY_AFTER_SECONDS)
+        except ValueError:
+            try:
+                when = parsedate_to_datetime(header).timestamp()
+                return min(max(when - time.time(), 0.0), MAX_RETRY_AFTER_SECONDS)
+            except (TypeError, ValueError):
+                pass
+    return float(2**attempt)
+
+
+class HttpClient:
+    """A polite wrapper around one `requests.Session`. Not shared between
+    threads: the scraper makes one per board."""
+
+    def __init__(
+        self,
+        contact_url: str | None = None,
+        session: requests.Session | None = None,
+        robots: RobotsCache = ROBOTS,
+        throttle: HostThrottle = THROTTLE,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self.session = session or requests.Session()
+        self.agent = user_agent(contact_url)
+        self.session.headers["User-Agent"] = self.agent
+        self._robots = robots
+        self._throttle = throttle
+        self._sleep = sleep
+
+    def close(self) -> None:
+        self.session.close()
+
+    def get(
+        self,
+        url: str,
+        params: Mapping[str, str | int] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> requests.Response:
+        """GET with robots, throttle and retries. Raises BoardFetchError for a
+        disallowed path, a final non-2xx status or a network error."""
+        host = urlsplit(url).netloc
+        self._throttle.wait(host)
+        if not self._robots.allowed(self.session, url, self.agent):
+            raise BoardFetchError(f"robots.txt disallows {url}")
+        for attempt in range(MAX_RETRIES + 1):
+            if attempt:
+                self._throttle.wait(host)
+            try:
+                response = self.session.get(
+                    url, params=params, headers=dict(headers or {}), timeout=timeout
+                )
+            except requests.RequestException as exc:
+                raise BoardFetchError(f"{host}: {exc}") from exc
+            retryable = response.status_code == 429 or response.status_code >= 500
+            if retryable and attempt < MAX_RETRIES:
+                self._sleep(_retry_after(response, attempt))
+                continue
+            if response.status_code >= 400:
+                raise BoardFetchError(f"{host}: HTTP {response.status_code} for {response.url}")
+            return response
+        raise BoardFetchError(f"{host}: gave up after {MAX_RETRIES} retries")  # pragma: no cover
+
+    def get_json(
+        self,
+        url: str,
+        params: Mapping[str, str | int] | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> object:
+        response = self.get(
+            url, params=params, headers={"Accept": "application/json"}, timeout=timeout
+        )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise BoardFetchError(f"{urlsplit(url).netloc}: response is not JSON") from exc

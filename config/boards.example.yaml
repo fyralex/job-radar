@@ -1,0 +1,22 @@
+# Demo boards, at least one per supported platform. Import them with:
+#   docker compose exec backend flask --app job_radar.wsgi boards import config/boards.example.yaml
+# Your own list belongs in config/boards.yaml, which git ignores. Boards can
+# also be added one at a time under Settings > Boards in the UI.
+#
+# Fields: platform, slug, org, and optional category and options. The UI shows
+# each platform's slug format and options.
+boards:
+  - {platform: greenhouse, slug: gitlab, org: GitLab, category: Developer tools}
+  - {platform: greenhouse, slug: datadog, org: Datadog, category: Developer tools}
+  - {platform: lever, slug: spotify, org: Spotify, category: Media}
+  - {platform: ashby, slug: linear, org: Linear, category: Developer tools}
+  - {platform: ashby, slug: ramp, org: Ramp, category: Fintech}
+  - {platform: workable, slug: huggingface, org: Hugging Face, category: AI}
+  - {platform: teamtailor, slug: career.teamtailor.com, org: Teamtailor, category: HR tech}
+  - {platform: breezy, slug: breezy-hr, org: Breezy HR, category: HR tech}
+  - {platform: recruitee, slug: bunq, org: bunq, category: Fintech}
+  - platform: jobvite
+    slug: q6NaVfwI/tylertech
+    org: Tyler Technologies
+    category: Gov tech
+    options: {us_remote_locations: [United States]}

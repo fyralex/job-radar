@@ -1,0 +1,171 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "Teamtailor",
+  "home_page_url": "https://career.teamtailor.com/jobs",
+  "feed_url": "https://career.teamtailor.com/jobs.json",
+  "items": [
+    {
+      "id": "f6c31512-671a-4e1c-be54-c8a1e2552144",
+      "title": "Customer Success Manager - French Speaking",
+      "url": "https://career.teamtailor.com/jobs/8742767-customer-success-manager-french-speaking",
+      "date_published": "2026-11-13T15:00:10+01:00",
+      "_jobposting": {
+        "@context": "http://schema.org/",
+        "@type": "JobPosting",
+        "title": "Customer Success Manager - French Speaking",
+        "identifier": {
+          "@type": "PropertyValue",
+          "name": "Teamtailor",
+          "value": "8742767"
+        },
+        "datePosted": "2026-11-13T15:00:10+01:00",
+        "employmentType": "FULL_TIME",
+        "directApply": true,
+        "hiringOrganization": {
+          "@type": "Organization",
+          "name": "Teamtailor",
+          "sameAs": "https://career.teamtailor.com",
+          "logo": "https://images.teamtailor-cdn.com/images/s3/teamtailor-production/logotype-v3/image_uploads/c8c3f7c9-5cf9-4ef6-9554-652e97576f47/original.svg"
+        },
+        "jobLocation": [
+          {
+            "@type": "Place",
+            "address": {
+              "streetAddress": "\u00d6stg\u00f6tagatan 16",
+              "addressLocality": "Stockholm",
+              "postalCode": "116 21",
+              "addressCountry": "SE",
+              "addressRegion": "Sweden",
+              "@type": "PostalAddress"
+            }
+          },
+          {
+            "@type": "Place",
+            "address": {
+              "streetAddress": "WeWork - Espacio de oficinas y coworking",
+              "addressLocality": "Barcelona",
+              "postalCode": "08005",
+              "addressCountry": "ES",
+              "addressRegion": "Europe",
+              "@type": "PostalAddress"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "849113ed-1526-4df8-b34c-7e7c5d1e117f",
+      "title": "Data Analyst",
+      "url": "https://career.teamtailor.com/jobs/8724398-data-analyst",
+      "date_published": "2026-11-13T07:10:18+01:00",
+      "_jobposting": {
+        "@context": "http://schema.org/",
+        "@type": "JobPosting",
+        "title": "Data Analyst",
+        "identifier": {
+          "@type": "PropertyValue",
+          "name": "Teamtailor",
+          "value": "8724398"
+        },
+        "datePosted": "2026-11-13T07:10:18+01:00",
+        "employmentType": "FULL_TIME",
+        "directApply": true,
+        "hiringOrganization": {
+          "@type": "Organization",
+          "name": "Teamtailor",
+          "sameAs": "https://career.teamtailor.com",
+          "logo": "https://images.teamtailor-cdn.com/images/s3/teamtailor-production/logotype-v3/image_uploads/c8c3f7c9-5cf9-4ef6-9554-652e97576f47/original.svg"
+        },
+        "jobLocation": [
+          {
+            "@type": "Place",
+            "address": {
+              "streetAddress": "\u00d6stg\u00f6tagatan 16",
+              "addressLocality": "Stockholm",
+              "postalCode": "116 21",
+              "addressCountry": "SE",
+              "addressRegion": "Sweden",
+              "@type": "PostalAddress"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "b5508148-ada5-4a7e-b2cb-55a3fd123a6f",
+      "title": "Enterprise Account Executive - Chicago",
+      "url": "https://career.teamtailor.com/jobs/8706432-enterprise-account-executive-chicago",
+      "date_published": "2026-11-11T17:34:36+01:00",
+      "_jobposting": {
+        "@context": "http://schema.org/",
+        "@type": "JobPosting",
+        "title": "Enterprise Account Executive - Chicago",
+        "identifier": {
+          "@type": "PropertyValue",
+          "name": "Teamtailor",
+          "value": "8706432"
+        },
+        "datePosted": "2026-11-11T17:34:36+01:00",
+        "employmentType": "FULL_TIME",
+        "directApply": true,
+        "hiringOrganization": {
+          "@type": "Organization",
+          "name": "Teamtailor",
+          "sameAs": "https://career.teamtailor.com",
+          "logo": "https://images.teamtailor-cdn.com/images/s3/teamtailor-production/logotype-v3/image_uploads/c8c3f7c9-5cf9-4ef6-9554-652e97576f47/original.svg"
+        },
+        "jobLocation": [
+          {
+            "@type": "Place",
+            "address": {
+              "streetAddress": "125 S Clark St",
+              "addressLocality": "Chicago",
+              "postalCode": "60603",
+              "addressCountry": "US",
+              "addressRegion": "North America",
+              "@type": "PostalAddress"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "f1bda991-e6d0-4373-98d9-76a8257f3856",
+      "title": "SMB Account Executive",
+      "url": "https://career.teamtailor.com/jobs/8694933-smb-account-executive",
+      "date_published": "2026-11-10T09:41:26+01:00",
+      "_jobposting": {
+        "@context": "http://schema.org/",
+        "@type": "JobPosting",
+        "title": "SMB Account Executive",
+        "identifier": {
+          "@type": "PropertyValue",
+          "name": "Teamtailor",
+          "value": "8694933"
+        },
+        "datePosted": "2026-11-10T09:41:26+01:00",
+        "employmentType": "FULL_TIME",
+        "directApply": true,
+        "hiringOrganization": {
+          "@type": "Organization",
+          "name": "Teamtailor",
+          "sameAs": "https://career.teamtailor.com",
+          "logo": "https://images.teamtailor-cdn.com/images/s3/teamtailor-production/logotype-v3/image_uploads/c8c3f7c9-5cf9-4ef6-9554-652e97576f47/original.svg"
+        },
+        "jobLocation": [
+          {
+            "@type": "Place",
+            "address": {
+              "streetAddress": "WeWork - Office Space & Coworking",
+              "addressLocality": "Sydney",
+              "postalCode": "2000",
+              "addressCountry": "AU",
+              "addressRegion": "Oceania",
+              "@type": "PostalAddress"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

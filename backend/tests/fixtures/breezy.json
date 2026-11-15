@@ -1,0 +1,89 @@
+[
+  {
+    "id": "fe15856f4460",
+    "friendly_id": "fe15856f4460-1-demo-testing-position-clone-12-18-2014",
+    "name": "1 Demo/Testing Position - Clone 12/18/2014",
+    "url": "https://breezy-hr.breezy.hr/p/fe15856f4460-1-demo-testing-position-clone-12-18-2014",
+    "published_date": "2026-11-06T20:57:57.244Z",
+    "type": {
+      "id": "temporary",
+      "name": "Temporary"
+    },
+    "location": {
+      "id": "008ccbabeb47",
+      "country": {
+        "id": "worldwide",
+        "name": "Worldwide"
+      },
+      "primary": true,
+      "is_remote": true,
+      "remote_details": {
+        "value": "hybrid",
+        "label": "Hybrid (Some remote, some in person)"
+      },
+      "name": "Worldwide"
+    },
+    "department": "",
+    "salary": "$21 / hour",
+    "company": {
+      "name": "AB Test",
+      "logo_url": null,
+      "friendly_id": "breezy-hr",
+      "isMultipleLocationsEnabled": true
+    },
+    "locations": [
+      {
+        "id": "008ccbabeb47",
+        "country": {
+          "id": "worldwide",
+          "name": "Worldwide"
+        },
+        "primary": true,
+        "is_remote": true,
+        "remote_details": {
+          "value": "hybrid",
+          "label": "Hybrid (Some remote, some in person)"
+        },
+        "name": "Worldwide"
+      },
+      {
+        "country": {
+          "name": "United States",
+          "id": "US"
+        },
+        "state": {
+          "id": "AL",
+          "name": "Alabama"
+        },
+        "city": "Dothan",
+        "primary": false,
+        "is_remote": true,
+        "remote_details": {
+          "value": "hybrid",
+          "label": "Hybrid (Some remote, some in person)"
+        },
+        "name": "Dothan, AL",
+        "id": "3bbee4c4e28d"
+      },
+      {
+        "country": {
+          "name": "United States",
+          "id": "US"
+        },
+        "state": {
+          "id": "FL",
+          "name": "Florida"
+        },
+        "city": "Tampa",
+        "primary": false,
+        "is_remote": true,
+        "remote_details": {
+          "value": "hybrid",
+          "label": "Hybrid (Some remote, some in person)"
+        },
+        "name": "Tampa, FL",
+        "id": "c6b8f65d5009"
+      }
+    ]
+  }
+]

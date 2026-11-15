@@ -80,6 +80,7 @@ export function AddApplicationForm({
         </label>
         <label>
           Status
+          {/* The options are built from APPLICATION_STATUSES, so the cast holds. */}
           <select value={status} onChange={(e) => setStatus(e.target.value as ApplicationStatus)}>
             {APPLICATION_STATUSES.map((s) => (
               <option key={s} value={s}>

@@ -32,6 +32,11 @@ export function postingsParams(query: PostingsQuery): Record<string, string> {
   return params;
 }
 
+// No statuses means every status.
+export function applicationsParams(statuses: ApplicationStatus[]): Record<string, string> {
+  return statuses.length ? {status: statuses.join(',')} : {};
+}
+
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({baseUrl: `${API_URL}/api`}),
@@ -117,10 +122,7 @@ export const api = createApi({
     // Every write returns the application with its events, and invalidates
     // the list and the detail ('Applications' covers both).
     getApplications: build.query<Application[], ApplicationStatus[]>({
-      query: (statuses) => ({
-        url: 'applications',
-        params: statuses.length ? {status: statuses.join(',')} : {},
-      }),
+      query: (statuses) => ({url: 'applications', params: applicationsParams(statuses)}),
       providesTags: ['Applications'],
     }),
     getApplication: build.query<ApplicationWithEvents, number>({

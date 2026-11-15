@@ -43,6 +43,7 @@ function StatusChange({
     <form className="row" onSubmit={(e) => void submit(e)}>
       <label>
         New status
+        {/* The options are built from ApplicationStatus values, so the cast holds. */}
         <select value={to} onChange={(e) => setTo(e.target.value as ApplicationStatus)}>
           {choices.map((s) => (
             <option key={s} value={s}>
@@ -68,10 +69,13 @@ function Notes({initial, onSave}: {initial: string; onSave: (notes: string) => S
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // The server trims notes; trim here too so the box matches what was saved.
   const save = async () => {
-    const result = await onSave(notes);
+    const trimmed = notes.trim();
+    const result = await onSave(trimmed);
     setError(result);
     setSaved(result === null);
+    if (result === null) setNotes(trimmed);
   };
 
   return (
@@ -92,7 +96,7 @@ function Notes({initial, onSave}: {initial: string; onSave: (notes: string) => S
         <button
           type="button"
           className="secondary"
-          disabled={notes === initial}
+          disabled={notes.trim() === initial}
           onClick={() => void save()}
         >
           Save notes

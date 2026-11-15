@@ -3,6 +3,8 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import {AddApplicationForm} from '../components/AddApplicationForm';
 import {ApplicationDetail} from '../components/ApplicationDetail';
 import {ApplicationsList, StatusBadge} from '../components/ApplicationsList';
+import {FilteredOutNotice, StatusFilter} from '../components/ApplicationsTab';
+import {applicationsParams} from '../redux/api';
 import {application} from './factories';
 
 afterEach(() => vi.restoreAllMocks());
@@ -118,6 +120,20 @@ describe('ApplicationDetail', () => {
     expect(await screen.findByText('Saved', {selector: '.ok'})).toBeTruthy();
   });
 
+  it('trims notes before saving, like the server does', async () => {
+    const {onSaveNotes} = renderDetail();
+    fireEvent.change(screen.getByLabelText('Notes'), {target: {value: '  follow up  '}});
+    fireEvent.click(screen.getByRole('button', {name: 'Save notes'}));
+    await waitFor(() => expect(onSaveNotes).toHaveBeenCalledWith('follow up'));
+    await waitFor(() => expect((screen.getByLabelText('Notes') as HTMLTextAreaElement).value).toBe('follow up'));
+  });
+
+  it('does not offer to save whitespace-only edits', () => {
+    renderDetail();
+    fireEvent.change(screen.getByLabelText('Notes'), {target: {value: '   '}});
+    expect((screen.getByRole('button', {name: 'Save notes'}) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('deletes only after confirming', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     const {onDelete} = renderDetail();
@@ -167,5 +183,54 @@ describe('AddApplicationForm', () => {
     render(<AddApplicationForm onSubmit={vi.fn()} onCancel={onCancel} />);
     fireEvent.click(screen.getByRole('button', {name: 'Cancel'}));
     expect(onCancel).toHaveBeenCalledOnce();
+  });
+});
+
+describe('applicationsParams', () => {
+  it('sends no status when none is ticked, so every status is listed', () => {
+    expect(applicationsParams([])).toEqual({});
+  });
+  it('joins the ticked statuses', () => {
+    expect(applicationsParams(['applied', 'interviewing'])).toEqual({status: 'applied,interviewing'});
+  });
+});
+
+describe('StatusFilter', () => {
+  it('shows every status when none is ticked', () => {
+    render(<StatusFilter selected={[]} onChange={vi.fn()} />);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(9);
+    expect(screen.getAllByRole('checkbox').every((c) => !(c as HTMLInputElement).checked)).toBe(true);
+    expect(screen.getByText(/Showing every status/)).toBeTruthy();
+    expect(screen.queryByRole('button', {name: 'Show all'})).toBeNull();
+  });
+
+  it('ticks and unticks a status', () => {
+    const onChange = vi.fn();
+    const {rerender} = render(<StatusFilter selected={[]} onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText('Offer'));
+    expect(onChange).toHaveBeenLastCalledWith(['offer']);
+
+    rerender(<StatusFilter selected={['offer', 'applied']} onChange={onChange} />);
+    expect((screen.getByLabelText('Offer') as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText(/Showing the ticked statuses/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Offer'));
+    expect(onChange).toHaveBeenLastCalledWith(['applied']);
+  });
+
+  it('clears the filter with Show all', () => {
+    const onChange = vi.fn();
+    render(<StatusFilter selected={['offer']} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', {name: 'Show all'}));
+    expect(onChange).toHaveBeenLastCalledWith([]);
+  });
+});
+
+describe('FilteredOutNotice', () => {
+  it('explains why the application left the list and offers to show all', () => {
+    const onShowAll = vi.fn();
+    render(<FilteredOutNotice title="Data Analyst" status="rejected" onShowAll={onShowAll} />);
+    expect(screen.getByText(/“Data Analyst” is now Rejected, which the status filter hides/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Show all statuses'}));
+    expect(onShowAll).toHaveBeenCalledOnce();
   });
 });

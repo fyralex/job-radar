@@ -1,4 +1,5 @@
 import {useEffect} from 'react';
+import {ApplicationsTab} from './components/ApplicationsTab';
 import {BoardsEditor} from './components/BoardsEditor';
 import {PostingsTab} from './components/PostingsTab';
 import {ProfilesEditor} from './components/ProfilesEditor';
@@ -6,9 +7,10 @@ import {SearchSettingsForm} from './components/SearchSettingsForm';
 import {useLocalPreference} from './hooks/useLocalPreference';
 import {useRecordVisitMutation} from './redux/api';
 
-type Tab = 'postings' | 'settings';
+type Tab = 'postings' | 'applications' | 'settings';
 const TABS: {key: Tab; label: string}[] = [
   {key: 'postings', label: 'Postings'},
+  {key: 'applications', label: 'Applications'},
   {key: 'settings', label: 'Settings'},
 ];
 
@@ -44,6 +46,8 @@ export function App() {
       <main>
         {tab === 'postings' ? (
           <PostingsTab onOpenSettings={() => setTab('settings')} />
+        ) : tab === 'applications' ? (
+          <ApplicationsTab />
         ) : (
           <>
             <ProfilesEditor />

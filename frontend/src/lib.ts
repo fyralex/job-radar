@@ -65,3 +65,12 @@ export function splitList(text: string): string[] {
 export function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 }
+
+// "Nov 15, 2026" in the browser's locale; the API sends ISO timestamps.
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}

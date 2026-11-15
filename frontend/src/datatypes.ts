@@ -162,3 +162,83 @@ export interface Mark {
   url: string;
   created_at: string;
 }
+
+// Applications: mirrors application_json and event_json in
+// backend/src/job_radar/services/applications_repo.py.
+export type ApplicationStatus =
+  | 'saved'
+  | 'applied'
+  | 'screening'
+  | 'interviewing'
+  | 'offer'
+  | 'accepted'
+  | 'rejected'
+  | 'withdrawn'
+  | 'ghosted';
+export const APPLICATION_STATUSES: ApplicationStatus[] = [
+  'saved',
+  'applied',
+  'screening',
+  'interviewing',
+  'offer',
+  'accepted',
+  'rejected',
+  'withdrawn',
+  'ghosted',
+];
+export const STATUS_LABELS: Record<ApplicationStatus, string> = {
+  saved: 'Saved',
+  applied: 'Applied',
+  screening: 'Screening',
+  interviewing: 'Interviewing',
+  offer: 'Offer',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  withdrawn: 'Withdrawn',
+  ghosted: 'Ghosted',
+};
+
+export interface ApplicationEvent {
+  id: number;
+  from_status: ApplicationStatus | null; // null for the event that created it
+  to_status: ApplicationStatus;
+  note: string;
+  at: string;
+}
+
+export interface Application {
+  id: number;
+  posting_key: string | null;
+  title: string;
+  org: string;
+  location: string | null;
+  url: string;
+  source: string;
+  status: ApplicationStatus;
+  applied_at: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// GET /api/applications/<id> and every write return the events too.
+export interface ApplicationWithEvents extends Application {
+  events: ApplicationEvent[];
+}
+
+// POST /api/applications for a job found elsewhere. `note` goes on the first
+// event; `notes` is the application's own free text.
+export interface ApplicationInput {
+  title: string;
+  org: string;
+  location: string;
+  url: string;
+  source: string;
+  status: ApplicationStatus;
+  notes: string;
+  note: string;
+}
+
+export type ApplicationEdit = Partial<
+  Pick<Application, 'title' | 'org' | 'location' | 'url' | 'source' | 'notes'>
+>;

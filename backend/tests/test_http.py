@@ -131,7 +131,9 @@ class RecordingThrottle:
 @pytest.mark.redis
 def test_redis_throttle_spaces_requests_per_host(redis_url: str) -> None:
     slept: list[float] = []
-    throttle = RedisThrottle(redis.Redis.from_url(redis_url), interval=1.0, sleep=slept.append)
+    throttle = RedisThrottle(
+        redis.Redis.from_url(redis_url), interval=1.0, sleep=slept.append, local=RecordingThrottle()
+    )
     throttle.wait("a.example.com")  # first request: no wait
     throttle.wait("a.example.com")  # one slot later
     throttle.wait("b.example.com")  # another host: no wait
@@ -167,15 +169,37 @@ def test_redis_throttle_frees_the_slot_after_the_interval(redis_url: str) -> Non
     assert 0 < ttl <= 1100
 
 
-def test_redis_throttle_falls_back_when_redis_is_down() -> None:
-    fallback = RecordingThrottle()
+def test_redis_throttle_still_throttles_locally_when_redis_is_down() -> None:
+    local = RecordingThrottle()
     slept: list[float] = []
     throttle = RedisThrottle(
-        redis.Redis.from_url("redis://127.0.0.1:1/0"), sleep=slept.append, fallback=fallback
+        redis.Redis.from_url("redis://127.0.0.1:1/0"), sleep=slept.append, local=local
     )
     throttle.wait("a.example.com")
-    assert fallback.hosts == ["a.example.com"]
+    assert local.hosts == ["a.example.com"]
     assert slept == []
+
+
+@pytest.mark.redis
+def test_redis_throttle_keeps_spacing_when_redis_flaps(redis_url: str) -> None:
+    # Redis works, fails, then comes back empty (a restart): each request to
+    # the host must still wait its turn, through the local throttle.
+    local_slept: list[float] = []
+    local = HostThrottle(interval=1.0, clock=lambda: 0.0, sleep=local_slept.append)
+    client = redis.Redis.from_url(redis_url)
+    throttle = RedisThrottle(client, sleep=lambda _s: None, local=local)
+    working = throttle._reserve
+
+    def failing(**_kwargs: object) -> int:
+        raise redis.ConnectionError("Redis went away")
+
+    throttle.wait("a.example.com")  # Redis up
+    throttle._reserve = failing  # type: ignore[assignment]
+    throttle.wait("a.example.com")  # Redis down
+    throttle._reserve = working
+    client.flushdb()  # Redis back, with no memory of the host
+    throttle.wait("a.example.com")
+    assert local_slept == [1.0, 2.0]
 
 
 @pytest.fixture
@@ -204,7 +228,11 @@ def test_redis_throttle_gives_concurrent_callers_distinct_slots(redis_url: str) 
         with lock:
             waits.append(seconds)
 
-    throttles = [RedisThrottle(redis.Redis.from_url(redis_url), sleep=record) for _ in range(2)]
+    # No local throttle here: this checks the Redis side alone.
+    throttles = [
+        RedisThrottle(redis.Redis.from_url(redis_url), sleep=record, local=RecordingThrottle())
+        for _ in range(2)
+    ]
     threads = [
         threading.Thread(target=throttles[i % 2].wait, args=("a.example.com",)) for i in range(8)
     ]

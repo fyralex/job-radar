@@ -151,34 +151,36 @@ return slot - now
 class RedisThrottle:
     """The per-host limit shared by every process through Redis.
 
-    Each call reserves the host's next free slot (`interval` apart) and sleeps
-    until it. If Redis is unreachable it falls back to `fallback`, the
-    in-process throttle, so requests stay spaced within this process."""
+    Every call first waits on `local`, an in-process throttle, then reserves
+    the host's next free slot in Redis (`interval` apart) and sleeps until it.
+    The local throttle always runs, so requests from this process stay spaced
+    even when Redis fails, comes back empty, or flaps between the two; Redis
+    adds the spacing against other processes."""
 
     def __init__(
         self,
         client: redis.Redis,
         interval: float = MIN_INTERVAL_SECONDS,
         sleep: Callable[[float], None] = time.sleep,
-        fallback: Throttle | None = None,
+        local: Throttle | None = None,
     ) -> None:
         self._reserve = client.register_script(_RESERVE_SLOT)
         self._interval_us = int(interval * 1_000_000)
         self._sleep = sleep
-        self._fallback = fallback if fallback is not None else HostThrottle(interval)
+        self._local = local if local is not None else HostThrottle(interval)
 
     @classmethod
     def from_url(cls, url: str) -> RedisThrottle:
         return cls(redis.Redis.from_url(url, socket_timeout=5, socket_connect_timeout=5))
 
     def wait(self, host: str) -> None:
+        self._local.wait(host)
         try:
             wait_us = int(
                 self._reserve(keys=[THROTTLE_KEY_PREFIX + host], args=[self._interval_us])
             )
         except redis.RedisError as exc:
             logger.warning("Redis unavailable; throttling %s in this process only: %s", host, exc)
-            self._fallback.wait(host)
             return
         if wait_us > 0:
             self._sleep(wait_us / 1_000_000)

@@ -35,8 +35,10 @@ RUN_LOCK = "run"
 # Locks aren't renewed, so a TTL must outlast the work it guards. With the
 # 1 request/second/host limit, a run takes about one second per request to its
 # busiest host: 2h covers 7,200 requests to one host. One board's fetch waits
-# behind at most the other scraper threads on its host (8 by default), so 15
-# min covers a board of about 100 pages. Both only matter if a process dies.
+# behind the other scraper threads on its host (8 by default) plus the odd
+# request from another process sharing the limit (a board validation, the
+# other gunicorn worker), so 15 min covers a board of about 100 pages. Both
+# only matter if a process dies.
 RUN_LOCK_TTL_SECONDS = 2 * 3600
 BOARD_LOCK_TTL_SECONDS = 15 * 60
 

@@ -1,7 +1,7 @@
 import {fireEvent, render, screen, within} from '@testing-library/react';
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {PostingsList} from '../components/PostingsList';
-import {postedLabel, sortPostings} from '../lib';
+import {applyNotice, postedLabel, sortPostings} from '../lib';
 import {posting} from './factories';
 
 beforeAll(() => {
@@ -75,5 +75,69 @@ describe('PostingsList', () => {
     render(<PostingsList postings={[p]} onMark={onMark} />);
     fireEvent.change(screen.getByLabelText(`Hide ${p.title}`), {target: {value: 'not_interested'}});
     expect(onMark).toHaveBeenCalledWith(p, 'not_interested');
+  });
+});
+
+function setScreen(narrow: boolean) {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: narrow,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+}
+
+describe('PostingsList Applied button', () => {
+  afterEach(() => setScreen(false));
+
+  it('calls onApply with the posting from the table', () => {
+    const onApply = vi.fn();
+    const p = posting({title: 'Data Engineer'});
+    render(<PostingsList postings={[p]} onApply={onApply} onMark={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', {name: 'Applied to Data Engineer'}));
+    expect(onApply).toHaveBeenCalledWith(p);
+    // The hide menu is still there next to it.
+    expect(screen.getByLabelText('Hide Data Engineer')).toBeTruthy();
+  });
+
+  it('shows the button on phone-width cards too', () => {
+    setScreen(true);
+    const onApply = vi.fn();
+    const p = posting({title: 'Analyst'});
+    render(<PostingsList postings={[p]} onApply={onApply} />);
+    expect(screen.queryByRole('table')).toBeNull();
+    fireEvent.click(screen.getByRole('button', {name: 'Applied to Analyst'}));
+    expect(onApply).toHaveBeenCalledWith(p);
+  });
+
+  it('has no action column without handlers', () => {
+    render(<PostingsList postings={[posting()]} />);
+    expect(screen.queryByRole('button', {name: /^Applied to/})).toBeNull();
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+  });
+});
+
+describe('applyNotice', () => {
+  it('confirms a new application', () => {
+    expect(applyNotice('Analyst', undefined)).toEqual({
+      text: 'Added “Analyst” to Applications as Applied.',
+      error: false,
+    });
+  });
+
+  it('treats a 409 (already added, e.g. a double-click) as success', () => {
+    const conflict = {status: 409, data: {error: 'that posting already has an application'}};
+    expect(applyNotice('Analyst', conflict)).toEqual({
+      text: '“Analyst” is already in Applications.',
+      error: false,
+    });
+  });
+
+  it('shows other errors with the server message', () => {
+    expect(applyNotice('Analyst', {status: 400, data: {error: 'no posting with that posting_key'}})).toEqual({
+      text: 'Couldn’t add “Analyst”: no posting with that posting_key',
+      error: true,
+    });
+    expect(applyNotice('Analyst', {status: 'FETCH_ERROR', error: 'offline'}).error).toBe(true);
   });
 });

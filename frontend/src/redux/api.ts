@@ -133,13 +133,24 @@ export const api = createApi({
       query: (body) => ({url: 'applications', method: 'POST', body}),
       invalidatesTags: ['Applications'],
     }),
+    // The Postings tab's "Applied" button: copies the posting, which then
+    // drops out of the postings list.
+    applyToPosting: build.mutation<ApplicationWithEvents, string>({
+      query: (postingKey) => ({
+        url: 'applications',
+        method: 'POST',
+        body: {posting_key: postingKey, status: 'applied'},
+      }),
+      invalidatesTags: ['Applications', 'Postings'],
+    }),
     updateApplication: build.mutation<ApplicationWithEvents, {id: number} & ApplicationEdit>({
       query: ({id, ...body}) => ({url: `applications/${id}`, method: 'PATCH', body}),
       invalidatesTags: ['Applications'],
     }),
     deleteApplication: build.mutation<void, number>({
       query: (id) => ({url: `applications/${id}`, method: 'DELETE'}),
-      invalidatesTags: ['Applications'],
+      // A deleted application's posting shows up in Postings again.
+      invalidatesTags: ['Applications', 'Postings'],
     }),
     changeApplicationStatus: build.mutation<
       ApplicationWithEvents,
@@ -174,6 +185,7 @@ export const {
   useGetApplicationsQuery,
   useGetApplicationQuery,
   useCreateApplicationMutation,
+  useApplyToPostingMutation,
   useUpdateApplicationMutation,
   useDeleteApplicationMutation,
   useChangeApplicationStatusMutation,

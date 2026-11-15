@@ -9,6 +9,7 @@ from flask import Blueprint, abort, jsonify
 from job_radar.app import db, state
 from job_radar.blueprints._util import bool_arg, int_arg, list_arg
 from job_radar.models import JobProfileRow, utcnow
+from job_radar.services.applications_repo import applied_posting_keys
 from job_radar.services.boards_repo import list_boards
 from job_radar.services.filters import PostingView, ViewFilters, apply_filters
 from job_radar.services.marks_repo import hidden_keys
@@ -46,7 +47,8 @@ def posting_json(p: PostingView) -> dict[str, Any]:
 def get_postings() -> Any:
     """Open postings after the user's filters. Query params override the saved
     settings for this request only: maxAgeDays, employmentType, workType,
-    category (repeatable), local=true, profile=<id> (omit for every posting)."""
+    category (repeatable), local=true, profile=<id> (omit for every posting).
+    Marked postings and postings with an application are left out."""
     session = db()
     settings = get_settings(session)
     rule = location_rule(settings)
@@ -70,7 +72,8 @@ def get_postings() -> Any:
         work_types=work_types,
         categories=list_arg("category"),
         local_only=bool_arg("local"),
-        hidden_keys=hidden_keys(session),
+        # Hidden or not-interested marks, and postings already in Applications.
+        hidden_keys=hidden_keys(session) | applied_posting_keys(session),
         matcher=matcher,
     )
     views = apply_filters(

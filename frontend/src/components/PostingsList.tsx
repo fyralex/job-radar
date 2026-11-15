@@ -5,6 +5,7 @@ import {type SortKey, postedLabel, sortPostings} from '../lib';
 import {EmploymentBadge, WorkTypeBadge} from './Badges';
 
 type OnMark = (posting: Posting, status: MarkStatus) => void;
+type OnApply = (posting: Posting) => void;
 
 const COLUMNS: {key: SortKey; label: string}[] = [
   {key: 'org', label: 'Organization'},
@@ -33,6 +34,38 @@ function MarkMenu({posting, onMark}: {posting: Posting; onMark: OnMark}) {
   );
 }
 
+function ApplyButton({posting, onApply}: {posting: Posting; onApply: OnApply}) {
+  return (
+    <button
+      type="button"
+      className="secondary apply-button"
+      aria-label={`Applied to ${posting.title}`}
+      title="Copy to Applications as Applied"
+      onClick={() => onApply(posting)}
+    >
+      Applied
+    </button>
+  );
+}
+
+// The "Applied" button and the hide menu, in one cell or card footer.
+function Actions({
+  posting,
+  onMark,
+  onApply,
+}: {
+  posting: Posting;
+  onMark?: OnMark;
+  onApply?: OnApply;
+}) {
+  return (
+    <div className="posting-actions">
+      {onApply && <ApplyButton posting={posting} onApply={onApply} />}
+      {onMark && <MarkMenu posting={posting} onMark={onMark} />}
+    </div>
+  );
+}
+
 function Location({posting}: {posting: Posting}) {
   return (
     <>
@@ -42,7 +75,16 @@ function Location({posting}: {posting: Posting}) {
   );
 }
 
-export function PostingsList({postings, onMark}: {postings: Posting[]; onMark?: OnMark}) {
+export function PostingsList({
+  postings,
+  onMark,
+  onApply,
+}: {
+  postings: Posting[];
+  onMark?: OnMark;
+  onApply?: OnApply;
+}) {
+  const hasActions = onMark !== undefined || onApply !== undefined;
   const [sort, setSort] = useState<{key: SortKey; desc: boolean}>({key: 'posted', desc: false});
   const narrow = useMediaQuery('(max-width: 640px)');
 
@@ -86,7 +128,7 @@ export function PostingsList({postings, onMark}: {postings: Posting[]; onMark?: 
                 </span>
                 <span>{postedLabel(p)}</span>
               </div>
-              {onMark && <MarkMenu posting={p} onMark={onMark} />}
+              {hasActions && <Actions posting={p} onMark={onMark} onApply={onApply} />}
             </li>
           ))}
         </ul>
@@ -110,9 +152,9 @@ export function PostingsList({postings, onMark}: {postings: Posting[]; onMark?: 
                 </button>
               </th>
             ))}
-            {onMark && (
+            {hasActions && (
               <th>
-                <span className="visually-hidden">Hide</span>
+                <span className="visually-hidden">Actions</span>
               </th>
             )}
           </tr>
@@ -131,9 +173,9 @@ export function PostingsList({postings, onMark}: {postings: Posting[]; onMark?: 
                 <Location posting={p} />
               </td>
               <td className="nowrap">{postedLabel(p)}</td>
-              {onMark && (
+              {hasActions && (
                 <td>
-                  <MarkMenu posting={p} onMark={onMark} />
+                  <Actions posting={p} onMark={onMark} onApply={onApply} />
                 </td>
               )}
             </tr>

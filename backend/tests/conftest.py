@@ -2,8 +2,10 @@
 
 Unit tests never touch the network: pytest-socket blocks it (see pyproject),
 and HTTP is faked with `responses`. Database tests need PostgreSQL at
-TEST_DATABASE_URL (or DATABASE_URL); each test runs in a transaction that is
-rolled back, so tests never see each other's rows.
+TEST_DATABASE_URL (never DATABASE_URL: the fixtures drop every table). Each
+test runs in a transaction that is rolled back, so tests never see each
+other's rows. With REQUIRE_DATABASE set (CI), a missing database fails the run
+instead of skipping.
 """
 
 from __future__ import annotations
@@ -55,21 +57,27 @@ def client_no_wait() -> HttpClient:
     )
 
 
-def _database_url() -> str | None:
-    return os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
+def _no_database(reason: str) -> None:
+    """Skip database tests locally; fail when REQUIRE_DATABASE is set (CI), so
+    a misconfigured run can't pass by skipping them."""
+    if os.environ.get("REQUIRE_DATABASE"):
+        pytest.fail(f"REQUIRE_DATABASE is set but {reason}")
+    pytest.skip(reason)
 
 
 @pytest.fixture(scope="session")
 def engine() -> Iterator[Engine]:
-    url = _database_url()
+    # Only TEST_DATABASE_URL, never DATABASE_URL: these tests drop every table.
+    url = os.environ.get("TEST_DATABASE_URL")
     if not url:
-        pytest.skip("no TEST_DATABASE_URL / DATABASE_URL: database tests skipped")
+        _no_database("TEST_DATABASE_URL is not set")
+        raise AssertionError("unreachable")
     engine = create_engine(url)
     try:
         with engine.connect():
             pass
     except OperationalError as exc:
-        pytest.skip(f"database unreachable: {exc}")
+        _no_database(f"database unreachable: {exc}")
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield engine

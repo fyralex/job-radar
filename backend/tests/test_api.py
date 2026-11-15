@@ -72,6 +72,13 @@ def test_health_with_redis_down(engine: Engine, sessions: sessionmaker[Session])
     }
 
 
+def test_refresh_with_redis_down_does_not_claim_to_start(
+    engine: Engine, sessions: sessionmaker[Session]
+) -> None:
+    api = _app_with_redis(engine, sessions, "redis://127.0.0.1:1/0")
+    assert api.post("/api/refresh").json["started"] is False
+
+
 @pytest.mark.redis
 def test_refreshing_follows_the_shared_run_lock(
     engine: Engine, sessions: sessionmaker[Session], redis_url: str

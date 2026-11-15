@@ -277,7 +277,7 @@ user's settings, so changing a setting never needs a rescrape.
 | GET / POST | `/api/applications` | List (`status`, repeatable) or create, by hand or from `posting_key`; 409 if that posting already has one. POST takes `status`, `note` (the first event's note) and `notes` (the application's own notes); with `posting_key` the title, org, location and URL come from the posting, `source` is the platform name, and those fields are ignored |
 | GET / PATCH / DELETE | `/api/applications/<id>` | One application with its events; PATCH edits fields and notes, never the status |
 | POST | `/api/applications/<id>/events` | Change the status: `{to_status, note}` |
-| GET | `/api/health` | Checks the database; used by the compose healthcheck |
+| GET | `/api/health` | Checks the database and Redis (`"not configured"` without `REDIS_URL`); 503 if either is down, which marks the backend container unhealthy. Used by the compose healthcheck |
 
 JSON stays in snake_case end to end, and `frontend/src/datatypes.ts` mirrors it
 exactly. The API has one consumer, so there's no camelCase layer.

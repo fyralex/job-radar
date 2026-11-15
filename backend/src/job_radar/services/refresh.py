@@ -62,6 +62,29 @@ def run_scrape(
     token = locks.acquire(RUN_LOCK, RUN_LOCK_TTL_SECONDS)
     if token is None:
         return None
+    return _run_holding_lock(
+        factory,
+        contact_url,
+        workers=workers,
+        board_ids=board_ids,
+        client_factory=client_factory,
+        locks=locks,
+        token=token,
+    )
+
+
+def _run_holding_lock(
+    factory: sessionmaker[Session],
+    contact_url: str | None,
+    *,
+    workers: int,
+    board_ids: Collection[int] | None,
+    client_factory: ClientFactory | None,
+    locks: Locks,
+    token: str,
+) -> RunSummary:
+    """The run itself, by a caller that already holds the run lock (`token`).
+    Releases the lock when done."""
     try:
         with session_scope(factory) as session:
             stmt = select(BoardRow).where(BoardRow.enabled.is_(True))
@@ -82,7 +105,10 @@ def run_scrape(
             for result in results:
                 if result.skipped:
                     skipped += 1
-                    logger.info("board %s skipped: being scraped elsewhere", result.board.key)
+                    logger.info(
+                        "board %s skipped: its lock is held elsewhere or Redis is down",
+                        result.board.key,
+                    )
                     continue
                 row = session.get(BoardRow, int(result.board.key))
                 if row is None:  # deleted while the run was in progress
@@ -96,8 +122,9 @@ def run_scrape(
                     failed += 1
                     row.last_status, row.last_error = "error", (result.error or "")[:2000]
                     logger.warning("board %s (%s) failed: %s", row.id, row.org, result.error)
-            # An install with no boards yet hasn't really scraped: keep it due.
-            if board_ids is None and results:
+            # A run that fetched nothing (no boards yet, or every board skipped)
+            # hasn't really scraped: keep it due so the worker tries again soon.
+            if board_ids is None and skipped < len(results):
                 get_settings(session).last_full_scrape_at = now
         return RunSummary(len(results), failed, total, now, skipped)
     finally:
@@ -117,15 +144,22 @@ def start_in_background(
     board_ids: Collection[int] | None = None,
     locks: Locks = LOCAL_LOCKS,
 ) -> bool:
-    """Kick off a run on a daemon thread. False if one is already running.
-    (The thread takes the run lock itself; if another run starts in between,
-    the thread just finds it held and returns.)"""
-    if is_running(locks):
+    """Kick off a run on a daemon thread. False if one is already running, or
+    if Redis is down so the run lock can't be taken. The lock is taken here,
+    before the thread starts, so "started" always means a run is happening."""
+    token = locks.acquire(RUN_LOCK, RUN_LOCK_TTL_SECONDS)
+    if token is None:
         return False
     thread = threading.Thread(
-        target=run_scrape,
-        args=(factory, contact_url, workers),
-        kwargs={"board_ids": board_ids, "locks": locks},
+        target=_run_holding_lock,
+        args=(factory, contact_url),
+        kwargs={
+            "workers": workers,
+            "board_ids": board_ids,
+            "client_factory": None,
+            "locks": locks,
+            "token": token,
+        },
         name="scrape",
         daemon=True,
     )

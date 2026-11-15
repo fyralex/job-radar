@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from job_radar.coordination import RUN_LOCK, LocalLocks, RedisLocks, board_lock
 from job_radar.http import HostThrottle, HttpClient, RobotsCache
 from job_radar.models import BoardRow, PostingRow
-from job_radar.services.refresh import is_running, run_scrape
+from job_radar.services.refresh import is_running, run_scrape, start_in_background
 from job_radar.services.settings_repo import get_settings
 from tests.conftest import fixture_json
 
@@ -113,6 +114,44 @@ def test_board_locked_elsewhere_is_skipped_and_left_alone(
     # Only "busy"'s jobs URL was never requested.
     assert not any("/boards/busy/" in c.request.url for c in responses.calls)
     assert not other.held(RUN_LOCK)
+
+
+def test_run_where_every_board_was_skipped_stays_due(
+    sessions: sessionmaker[Session], session: Session
+) -> None:
+    # E.g. Redis dropped after the run lock was taken: no board lock could be had.
+    board = BoardRow(platform="greenhouse", slug="busy", org="Busy", options={})
+    session.add(board)
+    session.commit()
+    locks = LocalLocks()
+    assert locks.acquire(board_lock(str(board.id)), 60) is not None
+    summary = run_scrape(sessions, None, client_factory=_client, locks=locks)
+    assert summary is not None and summary.skipped == 1
+    assert get_settings(session).last_full_scrape_at is None
+
+
+def test_start_in_background_takes_the_lock_first(sessions: sessionmaker[Session]) -> None:
+    locks = LocalLocks()
+    token = locks.acquire(RUN_LOCK, 60)
+    assert token is not None
+    assert start_in_background(sessions, None, locks=locks) is False
+    locks.release(RUN_LOCK, token)
+
+    assert start_in_background(sessions, None, locks=locks) is True
+    # The thread releases the lock when its (empty) run ends.
+    deadline = time.monotonic() + 5
+    while is_running(locks) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert not is_running(locks)
+
+
+def test_start_in_background_refuses_when_redis_is_down(
+    sessions: sessionmaker[Session],
+) -> None:
+    assert (
+        start_in_background(sessions, None, locks=RedisLocks.from_url("redis://127.0.0.1:1/0"))
+        is False
+    )
 
 
 def test_no_boards_does_not_count_as_a_full_scrape(

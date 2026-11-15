@@ -15,6 +15,7 @@ from types import FrameType
 from job_radar.config import Config
 from job_radar.coordination import make_locks
 from job_radar.db import make_engine, make_session_factory, session_scope
+from job_radar.http import configure_throttle
 from job_radar.models import utcnow
 from job_radar.services.refresh import run_scrape, scrape_due
 from job_radar.services.settings_repo import get_settings
@@ -28,6 +29,7 @@ def main() -> None:
     config = Config.from_env()
     factory = make_session_factory(make_engine(config.database_url))
     locks = make_locks(config.redis_url)
+    configure_throttle(config.redis_url)  # share the per-host rate limit with the API
     stop = threading.Event()
 
     def _stop(_signum: int, _frame: FrameType | None) -> None:

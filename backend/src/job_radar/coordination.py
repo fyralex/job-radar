@@ -32,7 +32,11 @@ logger = logging.getLogger(__name__)
 
 KEY_PREFIX = "job-radar:lock:"
 RUN_LOCK = "run"
-# Generous: a full run takes minutes. Only matters if a process dies holding it.
+# Locks aren't renewed, so a TTL must outlast the work it guards. With the
+# 1 request/second/host limit, a run takes about one second per request to its
+# busiest host: 2h covers 7,200 requests to one host. One board's fetch waits
+# behind at most the other scraper threads on its host (8 by default), so 15
+# min covers a board of about 100 pages. Both only matter if a process dies.
 RUN_LOCK_TTL_SECONDS = 2 * 3600
 BOARD_LOCK_TTL_SECONDS = 15 * 60
 

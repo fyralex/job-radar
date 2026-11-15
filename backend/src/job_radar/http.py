@@ -10,7 +10,9 @@ collection policy in CLAUDE.md on every request:
   next check. (Python's own `RobotFileParser.read()` treats 401/403 as
   disallow-all, which the RFC doesn't; one public posting API answers its
   robots.txt with 401.)
-- At most one request per second per host, shared by every thread.
+- At most one request per second per host. With `REDIS_URL` the limit is
+  shared by every process (`RedisThrottle`); without it, by every thread in
+  the process (`HostThrottle`).
 - 429 and 5xx responses are retried with backoff, honouring `Retry-After`.
 
 A disallowed path or a blocked request raises `BoardFetchError`; the board is
@@ -26,8 +28,10 @@ import urllib.robotparser
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
+from typing import Protocol
 from urllib.parse import urlsplit
 
+import redis
 import requests
 
 from job_radar import __version__
@@ -100,6 +104,11 @@ class RobotsCache:
         return _Robots(parser, False, now)
 
 
+class Throttle(Protocol):
+    def wait(self, host: str) -> None:
+        """Block until this process may send the next request to `host`."""
+
+
 class HostThrottle:
     """At most one request per `interval` seconds per host, across threads."""
 
@@ -124,8 +133,74 @@ class HostThrottle:
             self._sleep(slot - now)
 
 
+THROTTLE_KEY_PREFIX = "job-radar:throttle:"
+
+# Reserve the host's next slot atomically, on Redis's clock so every process
+# agrees on the time. Returns how long the caller must wait, in microseconds.
+_RESERVE_SLOT = """
+local t = redis.call("TIME")
+local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
+local slot = math.max(now, tonumber(redis.call("GET", KEYS[1]) or "0"))
+local next_slot = slot + tonumber(ARGV[1])
+local ttl_ms = math.ceil((next_slot - now) / 1000) + 1000
+redis.call("SET", KEYS[1], string.format("%d", next_slot), "PX", ttl_ms)
+return slot - now
+"""
+
+
+class RedisThrottle:
+    """The per-host limit shared by every process through Redis.
+
+    Each call reserves the host's next free slot (`interval` apart) and sleeps
+    until it. If Redis is unreachable it falls back to `fallback`, the
+    in-process throttle, so requests stay spaced within this process."""
+
+    def __init__(
+        self,
+        client: redis.Redis,
+        interval: float = MIN_INTERVAL_SECONDS,
+        sleep: Callable[[float], None] = time.sleep,
+        fallback: Throttle | None = None,
+    ) -> None:
+        self._reserve = client.register_script(_RESERVE_SLOT)
+        self._interval_us = int(interval * 1_000_000)
+        self._sleep = sleep
+        self._fallback = fallback if fallback is not None else HostThrottle(interval)
+
+    @classmethod
+    def from_url(cls, url: str) -> RedisThrottle:
+        return cls(redis.Redis.from_url(url, socket_timeout=5, socket_connect_timeout=5))
+
+    def wait(self, host: str) -> None:
+        try:
+            wait_us = int(
+                self._reserve(keys=[THROTTLE_KEY_PREFIX + host], args=[self._interval_us])
+            )
+        except redis.RedisError as exc:
+            logger.warning("Redis unavailable; throttling %s in this process only: %s", host, exc)
+            self._fallback.wait(host)
+            return
+        if wait_us > 0:
+            self._sleep(wait_us / 1_000_000)
+
+
 ROBOTS = RobotsCache()
 THROTTLE = HostThrottle()
+_default_throttle: Throttle = THROTTLE
+
+
+def configure_throttle(redis_url: str | None) -> Throttle:
+    """Choose the throttle new clients use by default: shared through Redis
+    when `redis_url` is set, else in-process. Called once at process start by
+    the entry points (wsgi, worker), not by `create_app`, so tests stay
+    isolated."""
+    global _default_throttle  # noqa: PLW0603 - one setting per process, set at start
+    _default_throttle = RedisThrottle.from_url(redis_url) if redis_url else THROTTLE
+    return _default_throttle
+
+
+def default_throttle() -> Throttle:
+    return _default_throttle
 
 
 def _retry_after(response: requests.Response, attempt: int) -> float:
@@ -151,14 +226,14 @@ class HttpClient:
         contact_url: str | None = None,
         session: requests.Session | None = None,
         robots: RobotsCache = ROBOTS,
-        throttle: HostThrottle = THROTTLE,
+        throttle: Throttle | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.session = session or requests.Session()
         self.agent = user_agent(contact_url)
         self.session.headers["User-Agent"] = self.agent
         self._robots = robots
-        self._throttle = throttle
+        self._throttle = throttle if throttle is not None else default_throttle()
         self._sleep = sleep
 
     def close(self) -> None:

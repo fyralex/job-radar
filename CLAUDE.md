@@ -113,8 +113,9 @@ modules must use its `HttpClient`, never `requests` directly):
   5xx or network error means the host is treated as disallowed. (The stdlib's
   own `read()` treats 401/403 as disallow-all; Ashby's API host answers
   robots.txt with 401, and the RFC reading was the owner's call.)
-- At most one request per second per host. 429 and 5xx are retried with
-  backoff, honouring `Retry-After`.
+- At most one request per second per host, shared by every process through
+  Redis (`RedisThrottle`; in-process only without Redis). 429 and 5xx are
+  retried with backoff, honouring `Retry-After`.
 - Only listing metadata is stored: title, organization, location, posted date,
   workplace type, employment type and URL. The dashboard links to the employer
   for the full text. Descriptions are never stored or shown.
@@ -146,7 +147,7 @@ backend/src/job_radar/
   app.py              create_app(): blueprints, DB session per request, errors -> JSON
   config.py           typed settings from environment variables
   coordination.py     run and per-board locks: Redis (SET NX PX + token) or in-process
-  http.py             HttpClient: honest UA, robots.txt, per-host throttle, retries
+  http.py             HttpClient: honest UA, robots.txt, per-host throttle (Redis-shared), retries
   models.py           SQLAlchemy models (migrations in backend/migrations)
   worker.py           scheduled scraper (python -m job_radar.worker)
   cli.py              flask boards import <yaml>, flask scrape
@@ -361,8 +362,8 @@ Milestone `v0.1`, one PR each:
 1. Milestone CI, issue and PR templates.
 2. Applications (done: #2, #8, #9): status pipeline, status history with
    notes, manual entries, and an "Applied" button on postings.
-3. Redis: run and per-board locks and health (#3); a per-host rate limiter
-   shared across processes and a per-board result cache (#16).
+3. Redis: run and per-board locks and health (#3), a per-host rate limiter
+   shared across processes (#16), and a per-board result cache (#19).
 4. `scrape_runs` history and a health column for boards.
 5. README with a screenshot, architecture diagram and quick start.
 

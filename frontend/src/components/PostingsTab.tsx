@@ -27,7 +27,6 @@ import {PostingsList} from './PostingsList';
 
 const ALL = 'all';
 
-
 function ProfileTabs({
   profiles,
   selected,

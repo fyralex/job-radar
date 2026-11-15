@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {APPLICATION_STATUSES, type ApplicationStatus, STATUS_LABELS} from '../datatypes';
 import {errorText} from '../errors';
+import {useActionError} from '../hooks/useActionError';
 import {useLocalPreference} from '../hooks/useLocalPreference';
 import {toggle} from '../lib';
 import {
@@ -54,8 +55,8 @@ export function StatusFilter({
   );
 }
 
-// Shown when the open application's status is one the filter hides, e.g.
-// right after changing it, so it doesn't just vanish.
+// Shown when the open application's status is one the filter hides (its
+// status just changed, or the user unticked it), so it doesn't just vanish.
 export function FilteredOutNotice({
   title,
   status,
@@ -67,7 +68,7 @@ export function FilteredOutNotice({
 }) {
   return (
     <p className="notice">
-      “{title}” is now {STATUS_LABELS[status]}, which the status filter hides.{' '}
+      “{title}” ({STATUS_LABELS[status]}) is hidden by the status filter.{' '}
       <button type="button" className="link-button" onClick={onShowAll}>
         Show all statuses
       </button>
@@ -90,6 +91,7 @@ export function ApplicationsTab() {
   const [updateApplication] = useUpdateApplicationMutation();
   const [deleteApplication] = useDeleteApplicationMutation();
   const [changeStatus] = useChangeApplicationStatusMutation();
+  const removal = useActionError();
 
   // The open application no longer matches the filter (e.g. its status just
   // changed), so its card has dropped out of the list.
@@ -108,8 +110,10 @@ export function ApplicationsTab() {
         }
         onSaveNotes={async (notes) => outcome(await updateApplication({id: selected.id, notes}))}
         onDelete={() => {
-          setSelectedId(null);
-          void deleteApplication(selected.id);
+          // Close the detail only once the delete has worked.
+          void removal.run(deleteApplication(selected.id)).then((ok) => {
+            if (ok) setSelectedId(null);
+          });
         }}
       />
     ) : (
@@ -126,6 +130,11 @@ export function ApplicationsTab() {
           </button>
         )}
       </div>
+      {removal.error && (
+        <p className="error" role="alert">
+          Couldn’t delete the application: {removal.error}
+        </p>
+      )}
       {filteredOut && selected && (
         <FilteredOutNotice
           title={selected.title}

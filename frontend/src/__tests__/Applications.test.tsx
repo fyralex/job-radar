@@ -229,7 +229,7 @@ describe('FilteredOutNotice', () => {
   it('explains why the application left the list and offers to show all', () => {
     const onShowAll = vi.fn();
     render(<FilteredOutNotice title="Data Analyst" status="rejected" onShowAll={onShowAll} />);
-    expect(screen.getByText(/“Data Analyst” is now Rejected, which the status filter hides/)).toBeTruthy();
+    expect(screen.getByText(/“Data Analyst” \(Rejected\) is hidden by the status filter/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', {name: 'Show all statuses'}));
     expect(onShowAll).toHaveBeenCalledOnce();
   });

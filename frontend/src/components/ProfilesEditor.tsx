@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import type {Preset, Profile, ProfileInput} from '../datatypes';
 import {errorText} from '../errors';
+import {useActionError} from '../hooks/useActionError';
 import {parseTerms} from '../lib';
 import {
   useCreateProfileMutation,
@@ -107,6 +108,7 @@ export function ProfilesEditor() {
   const [createProfile] = useCreateProfileMutation();
   const [updateProfile] = useUpdateProfileMutation();
   const [deleteProfile] = useDeleteProfileMutation();
+  const removal = useActionError();
   const [editing, setEditing] = useState<Profile | 'new' | null>(null);
   const [draft, setDraft] = useState<ProfileInput>(EMPTY);
 
@@ -131,6 +133,11 @@ export function ProfilesEditor() {
     <section className="panel">
       <h2>Job profiles</h2>
       <p className="hint">Each profile is a tab on the Postings page.</p>
+      {removal.error && (
+        <p className="error" role="alert">
+          Couldn’t delete the profile: {removal.error}
+        </p>
+      )}
       <ul className="item-list">
         {profiles.map((p) => (
           <li key={p.id}>
@@ -151,7 +158,9 @@ export function ProfilesEditor() {
               type="button"
               className="link-button danger"
               onClick={() => {
-                if (window.confirm(`Delete the profile "${p.name}"?`)) void deleteProfile(p.id);
+                if (window.confirm(`Delete the profile "${p.name}"?`)) {
+                  void removal.run(deleteProfile(p.id));
+                }
               }}
             >
               Delete

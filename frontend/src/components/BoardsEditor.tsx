@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import type {BoardInput, BoardOptions, BoardValidation, Platform} from '../datatypes';
 import {errorText} from '../errors';
+import {useActionError} from '../hooks/useActionError';
 import {
   useCreateBoardMutation,
   useDeleteBoardMutation,
@@ -154,6 +155,7 @@ export function BoardsEditor() {
   const {data: boards = []} = useGetBoardsQuery();
   const [updateBoard] = useUpdateBoardMutation();
   const [deleteBoard] = useDeleteBoardMutation();
+  const removal = useActionError();
 
   return (
     <section className="panel">
@@ -163,6 +165,11 @@ export function BoardsEditor() {
         robots.txt and waits a second between requests to the same site.
       </p>
       {platforms.length > 0 && <AddBoardForm platforms={platforms} />}
+      {removal.error && (
+        <p className="error" role="alert">
+          Couldn’t remove the board: {removal.error}
+        </p>
+      )}
       <div className="table-scroll">
         <table className="boards">
           <thead>
@@ -211,7 +218,7 @@ export function BoardsEditor() {
                     className="link-button danger"
                     onClick={() => {
                       if (window.confirm(`Stop following ${b.org}? Its postings are removed.`)) {
-                        void deleteBoard(b.id);
+                        void removal.run(deleteBoard(b.id));
                       }
                     }}
                   >

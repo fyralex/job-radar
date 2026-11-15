@@ -5,6 +5,9 @@ pool of `workers` threads. Politeness is shared across threads: robots.txt is
 cached per host and the per-host throttle spaces requests one second apart, so
 two boards on the same API host still take turns. A board that fails is
 reported with its error and never cached; the next run tries it again.
+
+With `locks`, each board is fetched under its board lock. A board whose lock
+is held elsewhere is skipped (`skipped=True`), not reported as failed.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+from job_radar.coordination import BOARD_LOCK_TTL_SECONDS, Locks, board_lock, holding
 from job_radar.http import HttpClient
 from job_radar.sources import get_platform
 from job_radar.sources.common import Board, BoardFetchError, RawPosting
@@ -30,10 +34,11 @@ class BoardResult:
     postings: tuple[RawPosting, ...]
     error: str | None
     seconds: float
+    skipped: bool = False  # another process holds this board's lock
 
     @property
     def ok(self) -> bool:
-        return self.error is None
+        return self.error is None and not self.skipped
 
 
 def fetch_one(board: Board, client_factory: ClientFactory) -> BoardResult:
@@ -52,10 +57,26 @@ def fetch_one(board: Board, client_factory: ClientFactory) -> BoardResult:
     return BoardResult(board, (), error, time.monotonic() - started)
 
 
+def _fetch_locked(board: Board, client_factory: ClientFactory, locks: Locks) -> BoardResult:
+    with holding(locks, board_lock(board.key), BOARD_LOCK_TTL_SECONDS) as got:
+        if not got:
+            return BoardResult(board, (), None, 0.0, skipped=True)
+        return fetch_one(board, client_factory)
+
+
 def fetch_boards(
-    boards: Sequence[Board], client_factory: ClientFactory, workers: int = 8
+    boards: Sequence[Board],
+    client_factory: ClientFactory,
+    workers: int = 8,
+    locks: Locks | None = None,
 ) -> list[BoardResult]:
     if not boards:
         return []
+
+    def fetch(board: Board) -> BoardResult:
+        if locks is None:
+            return fetch_one(board, client_factory)
+        return _fetch_locked(board, client_factory, locks)
+
     with ThreadPoolExecutor(max_workers=max(1, min(workers, len(boards)))) as pool:
-        return list(pool.map(lambda b: fetch_one(b, client_factory), boards))
+        return list(pool.map(fetch, boards))

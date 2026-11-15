@@ -13,6 +13,7 @@ import threading
 from types import FrameType
 
 from job_radar.config import Config
+from job_radar.coordination import make_locks
 from job_radar.db import make_engine, make_session_factory, session_scope
 from job_radar.models import utcnow
 from job_radar.services.refresh import run_scrape, scrape_due
@@ -26,6 +27,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     config = Config.from_env()
     factory = make_session_factory(make_engine(config.database_url))
+    locks = make_locks(config.redis_url)
     stop = threading.Event()
 
     def _stop(_signum: int, _frame: FrameType | None) -> None:
@@ -42,14 +44,19 @@ def main() -> None:
                     settings.last_full_scrape_at, settings.scrape_interval_hours, utcnow()
                 )
             if due:
-                summary = run_scrape(factory, config.contact_url, config.scrape_workers)
+                summary = run_scrape(
+                    factory, config.contact_url, config.scrape_workers, locks=locks
+                )
                 if summary:
                     logger.info(
-                        "scraped %s boards (%s failed), %s postings",
+                        "scraped %s boards (%s failed, %s skipped), %s postings",
                         summary.boards,
                         summary.failed,
+                        summary.skipped,
                         summary.postings,
                     )
+                else:
+                    logger.info("scrape due, but another run holds the lock (or Redis is down)")
         except Exception:
             logger.exception("scheduled scrape failed")
         stop.wait(CHECK_SECONDS)

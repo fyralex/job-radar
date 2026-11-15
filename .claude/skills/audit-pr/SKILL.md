@@ -55,14 +55,14 @@ or ships a bug. Everything else is **non-blocking**.
 ```bash
 git worktree add --detach /tmp/audit-pr-<N> origin/<head-branch>   # after: gh pr view <N> --json headRefName
 cd /tmp/audit-pr-<N>/backend && ruff check . && ruff format --check . && mypy src
-cd /tmp/audit-pr-<N>/backend && TEST_DATABASE_URL=<url> pytest -q -rs
+cd /tmp/audit-pr-<N>/backend && TEST_DATABASE_URL=<url> TEST_REDIS_URL=<url> pytest -q -rs
 cd /tmp/audit-pr-<N>/frontend && yarn install --frozen-lockfile && yarn lint && yarn typecheck && yarn test && yarn build
 git worktree remove /tmp/audit-pr-<N>
 ```
 
 Use the backend venv from the main checkout (`../../<repo>/backend/.venv/bin/`)
 or create one in the worktree. The `run-job-radar` skill shows how to start a
-throwaway Postgres for `TEST_DATABASE_URL`.
+throwaway Postgres and Redis for `TEST_DATABASE_URL` and `TEST_REDIS_URL`.
 
 ## Comment format
 

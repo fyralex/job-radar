@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from werkzeug.exceptions import HTTPException
 
 from job_radar.config import Config
+from job_radar.coordination import Locks, make_locks
 from job_radar.db import make_engine, make_session_factory
 
 EXTENSION = "job_radar"
@@ -22,6 +23,7 @@ class AppState:
     config: Config
     engine: Engine
     sessions: sessionmaker[Session]
+    locks: Locks
 
 
 def state() -> AppState:
@@ -41,13 +43,20 @@ def create_app(
     config: Config | None = None,
     engine: Engine | None = None,
     sessions: sessionmaker[Session] | None = None,
+    locks: Locks | None = None,
 ) -> Flask:
-    """`engine` and `sessions` let tests bind the app to a rolled-back transaction."""
+    """`engine` and `sessions` let tests bind the app to a rolled-back
+    transaction; `locks` lets them use a test Redis."""
     config = config or Config.from_env()
     app = Flask(__name__)
     app.json.sort_keys = False  # type: ignore[attr-defined]
     engine = engine or make_engine(config.database_url)
-    app.extensions[EXTENSION] = AppState(config, engine, sessions or make_session_factory(engine))
+    app.extensions[EXTENSION] = AppState(
+        config,
+        engine,
+        sessions or make_session_factory(engine),
+        locks or make_locks(config.redis_url),
+    )
     logging.basicConfig(level=logging.INFO)
 
     @app.teardown_appcontext

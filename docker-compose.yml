@@ -1,7 +1,9 @@
-# Four services: frontend (nginx + the built UI, proxying /api), backend (Flask
-# API), worker (scheduled scrapes) and postgres. Redis arrives in its own PR.
-x-database-url: &database-url
+# Five services: frontend (nginx + the built UI, proxying /api), backend (Flask
+# API), worker (scheduled scrapes), postgres, and redis (locks shared by the
+# backend and the worker, so they never scrape at the same time).
+x-app-env: &app-env
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-jobradar}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-jobradar}
+  REDIS_URL: redis://redis:6379/0
 
 services:
   postgres:
@@ -19,14 +21,27 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Holds only short-lived locks, so nothing is written to disk.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build: ./backend
     env_file: .env
-    environment: *database-url
+    environment: *app-env
     volumes:
       - ./config:/app/config:ro
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
@@ -40,7 +55,7 @@ services:
     build: ./backend
     command: ["python", "-m", "job_radar.worker"]
     env_file: .env
-    environment: *database-url
+    environment: *app-env
     depends_on:
       backend:
         condition: service_healthy

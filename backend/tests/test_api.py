@@ -5,8 +5,12 @@ from typing import Any
 
 import pytest
 from flask.testing import FlaskClient
-from sqlalchemy.orm import Session
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
+from job_radar.app import create_app
+from job_radar.config import Config
+from job_radar.coordination import RUN_LOCK, RedisLocks
 from job_radar.models import BoardRow, utcnow
 from job_radar.services.postings_repo import upsert_board_postings
 from job_radar.services.settings_repo import get_settings
@@ -37,7 +41,51 @@ def raw(
 
 
 def test_health(api: FlaskClient) -> None:
-    assert api.get("/api/health").json == {"status": "ok", "database": "ok", "version": "0.1.0"}
+    assert api.get("/api/health").json == {
+        "status": "ok",
+        "database": "ok",
+        "redis": "not configured",
+        "version": "0.1.0",
+    }
+
+
+def _app_with_redis(engine: Engine, sessions: sessionmaker[Session], url: str) -> FlaskClient:
+    config = Config(database_url="unused", redis_url=url, testing=True)
+    return create_app(config, engine=engine, sessions=sessions).test_client()
+
+
+@pytest.mark.redis
+def test_health_with_redis(engine: Engine, sessions: sessionmaker[Session], redis_url: str) -> None:
+    response = _app_with_redis(engine, sessions, redis_url).get("/api/health")
+    assert response.status_code == 200
+    assert response.json["redis"] == "ok"
+
+
+def test_health_with_redis_down(engine: Engine, sessions: sessionmaker[Session]) -> None:
+    response = _app_with_redis(engine, sessions, "redis://127.0.0.1:1/0").get("/api/health")
+    assert response.status_code == 503
+    assert response.json == {
+        "status": "error",
+        "database": "ok",
+        "redis": "unreachable",
+        "version": "0.1.0",
+    }
+
+
+@pytest.mark.redis
+def test_refreshing_follows_the_shared_run_lock(
+    engine: Engine, sessions: sessionmaker[Session], redis_url: str
+) -> None:
+    api = _app_with_redis(engine, sessions, redis_url)
+    assert api.get("/api/postings").json["refreshing"] is False
+    # Another process (the worker) holds the run lock.
+    worker = RedisLocks.from_url(redis_url)
+    token = worker.acquire(RUN_LOCK, 60)
+    assert token is not None
+    assert api.get("/api/postings").json["refreshing"] is True
+    assert api.post("/api/refresh").json["started"] is False
+    worker.release(RUN_LOCK, token)
+    assert api.get("/api/postings").json["refreshing"] is False
 
 
 class TestBoards:

@@ -91,7 +91,7 @@ def get_postings() -> Any:
         scraped_at=settings.last_full_scrape_at.isoformat()
         if settings.last_full_scrape_at
         else None,
-        refreshing=is_running(),
+        refreshing=is_running(state().locks),
     )
 
 
@@ -99,7 +99,10 @@ def get_postings() -> Any:
 def refresh() -> Any:
     app_state = state()
     started = start_in_background(
-        app_state.sessions, app_state.config.contact_url, app_state.config.scrape_workers
+        app_state.sessions,
+        app_state.config.contact_url,
+        app_state.config.scrape_workers,
+        locks=app_state.locks,
     )
     return jsonify(started=started, refreshing=True), 202
 

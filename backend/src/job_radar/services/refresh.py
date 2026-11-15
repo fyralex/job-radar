@@ -1,9 +1,10 @@
 """One scrape run: fetch the enabled boards, store results, record each board's
 outcome. Used by the scheduled worker and the "Refresh now" button.
 
-Only one run happens at a time per process (`_RUN_LOCK`). The worker container
-and the API process each have their own lock until the Redis lock arrives;
-a double run costs requests, not correctness, since upserts are idempotent.
+Only one run happens at a time: the run lock (see `coordination`) is shared
+through Redis by the worker, the API and `flask scrape`. Each board is also
+fetched under its own lock; a board skipped because another process holds it
+is left untouched, like a board that wasn't in the run.
 """
 
 from __future__ import annotations
@@ -17,6 +18,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from job_radar.coordination import (
+    LOCAL_LOCKS,
+    RUN_LOCK,
+    RUN_LOCK_TTL_SECONDS,
+    Locks,
+)
 from job_radar.db import session_scope
 from job_radar.http import HttpClient
 from job_radar.models import BoardRow, utcnow
@@ -27,8 +34,6 @@ from job_radar.services.settings_repo import get_settings
 
 logger = logging.getLogger(__name__)
 
-_RUN_LOCK = threading.Lock()
-
 
 @dataclass(frozen=True)
 class RunSummary:
@@ -36,21 +41,26 @@ class RunSummary:
     failed: int
     postings: int
     finished_at: datetime
+    skipped: int = 0
 
 
-def is_running() -> bool:
-    return _RUN_LOCK.locked()
+def is_running(locks: Locks = LOCAL_LOCKS) -> bool:
+    return locks.held(RUN_LOCK)
 
 
 def run_scrape(
     factory: sessionmaker[Session],
     contact_url: str | None,
     workers: int = 8,
+    *,
     board_ids: Collection[int] | None = None,
     client_factory: ClientFactory | None = None,
+    locks: Locks = LOCAL_LOCKS,
 ) -> RunSummary | None:
-    """Scrape now. Returns None if a run is already in progress here."""
-    if not _RUN_LOCK.acquire(blocking=False):
+    """Scrape now. Returns None if a run is already in progress anywhere (or
+    Redis is unreachable, so the run lock can't be taken)."""
+    token = locks.acquire(RUN_LOCK, RUN_LOCK_TTL_SECONDS)
+    if token is None:
         return None
     try:
         with session_scope(factory) as session:
@@ -60,13 +70,20 @@ def run_scrape(
             boards = [to_board(row) for row in session.scalars(stmt)]
 
         results = fetch_boards(
-            boards, client_factory or (lambda: HttpClient(contact_url)), workers=workers
+            boards,
+            client_factory or (lambda: HttpClient(contact_url)),
+            workers=workers,
+            locks=locks,
         )
 
         now = utcnow()
-        total = failed = 0
+        total = failed = skipped = 0
         with session_scope(factory) as session:
             for result in results:
+                if result.skipped:
+                    skipped += 1
+                    logger.info("board %s skipped: being scraped elsewhere", result.board.key)
+                    continue
                 row = session.get(BoardRow, int(result.board.key))
                 if row is None:  # deleted while the run was in progress
                     continue
@@ -82,9 +99,9 @@ def run_scrape(
             # An install with no boards yet hasn't really scraped: keep it due.
             if board_ids is None and results:
                 get_settings(session).last_full_scrape_at = now
-        return RunSummary(len(results), failed, total, now)
+        return RunSummary(len(results), failed, total, now, skipped)
     finally:
-        _RUN_LOCK.release()
+        locks.release(RUN_LOCK, token)
 
 
 def scrape_due(last_full_scrape_at: datetime | None, interval_hours: int, now: datetime) -> bool:
@@ -98,13 +115,17 @@ def start_in_background(
     contact_url: str | None,
     workers: int = 8,
     board_ids: Collection[int] | None = None,
+    locks: Locks = LOCAL_LOCKS,
 ) -> bool:
-    """Kick off a run on a daemon thread. False if one is already running."""
-    if is_running():
+    """Kick off a run on a daemon thread. False if one is already running.
+    (The thread takes the run lock itself; if another run starts in between,
+    the thread just finds it held and returns.)"""
+    if is_running(locks):
         return False
     thread = threading.Thread(
         target=run_scrape,
-        args=(factory, contact_url, workers, board_ids),
+        args=(factory, contact_url, workers),
+        kwargs={"board_ids": board_ids, "locks": locks},
         name="scrape",
         daemon=True,
     )

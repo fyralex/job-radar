@@ -1,5 +1,10 @@
 import {createApi, fetchBaseQuery} from '@reduxjs/toolkit/query/react';
 import type {
+  Application,
+  ApplicationEdit,
+  ApplicationInput,
+  ApplicationStatus,
+  ApplicationWithEvents,
   Board,
   BoardInput,
   BoardValidation,
@@ -30,7 +35,7 @@ export function postingsParams(query: PostingsQuery): Record<string, string> {
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({baseUrl: `${API_URL}/api`}),
-  tagTypes: ['Postings', 'Boards', 'Profiles', 'Settings', 'Marks'],
+  tagTypes: ['Postings', 'Boards', 'Profiles', 'Settings', 'Marks', 'Applications'],
   endpoints: (build) => ({
     getPostings: build.query<PostingsResponse, PostingsQuery>({
       query: (query) => ({url: 'postings', params: postingsParams(query)}),
@@ -108,6 +113,39 @@ export const api = createApi({
       query: (key) => ({url: 'marks', method: 'DELETE', params: {key}}),
       invalidatesTags: ['Marks', 'Postings'],
     }),
+
+    // Every write returns the application with its events, and invalidates
+    // the list and the detail ('Applications' covers both).
+    getApplications: build.query<Application[], ApplicationStatus[]>({
+      query: (statuses) => ({
+        url: 'applications',
+        params: statuses.length ? {status: statuses.join(',')} : {},
+      }),
+      providesTags: ['Applications'],
+    }),
+    getApplication: build.query<ApplicationWithEvents, number>({
+      query: (id) => `applications/${id}`,
+      providesTags: ['Applications'],
+    }),
+    createApplication: build.mutation<ApplicationWithEvents, ApplicationInput>({
+      query: (body) => ({url: 'applications', method: 'POST', body}),
+      invalidatesTags: ['Applications'],
+    }),
+    updateApplication: build.mutation<ApplicationWithEvents, {id: number} & ApplicationEdit>({
+      query: ({id, ...body}) => ({url: `applications/${id}`, method: 'PATCH', body}),
+      invalidatesTags: ['Applications'],
+    }),
+    deleteApplication: build.mutation<void, number>({
+      query: (id) => ({url: `applications/${id}`, method: 'DELETE'}),
+      invalidatesTags: ['Applications'],
+    }),
+    changeApplicationStatus: build.mutation<
+      ApplicationWithEvents,
+      {id: number; to_status: ApplicationStatus; note: string}
+    >({
+      query: ({id, ...body}) => ({url: `applications/${id}/events`, method: 'POST', body}),
+      invalidatesTags: ['Applications'],
+    }),
   }),
 });
 
@@ -131,4 +169,10 @@ export const {
   useGetMarksQuery,
   useAddMarkMutation,
   useRemoveMarkMutation,
+  useGetApplicationsQuery,
+  useGetApplicationQuery,
+  useCreateApplicationMutation,
+  useUpdateApplicationMutation,
+  useDeleteApplicationMutation,
+  useChangeApplicationStatusMutation,
 } = api;

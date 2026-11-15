@@ -11,11 +11,12 @@ user, and there is no login. The user:
 - filters by posting age, work type (on-site, hybrid, remote) and employment
   type (full-time, contract...),
 - hides postings they don't want, and sees which postings are new since their
-  last visit.
+  last visit,
+- tracks applications: a status pipeline with history and notes, for postings
+  marked "Applied" and for jobs found elsewhere.
 
 A worker scrapes the boards on a schedule. The dashboard reads from
-PostgreSQL. Application tracking (status pipeline, history, notes) is the next
-feature (see "Roadmap").
+PostgreSQL.
 
 This file is committed to a **public** repository. Keep it free of personal
 details: no names, home towns, employer target lists, salaries or application
@@ -230,6 +231,9 @@ user's settings, so changing a setting never needs a rescrape.
 - **Dedupe key** is org + title + location (`posting_key`), not `req_id`,
   because some boards list one opening under several ids. Marks use the same
   key.
+- **Hidden postings**: marks (hidden / not interested) and postings that have
+  an application (by `posting_key`) are left out. Deleting the application
+  brings the posting back.
 
 ### Data model
 
@@ -257,7 +261,7 @@ user's settings, so changing a setting never needs a rescrape.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/postings` | `profile`, `maxAgeDays`, `workType`, `employmentType`, `category` (repeatable), `local=true`. Returns `{postings, failures, scraped_at, refreshing}` |
+| GET | `/api/postings` | `profile`, `maxAgeDays`, `workType`, `employmentType`, `category` (repeatable), `local=true`. Leaves out marked postings and those with an application. Returns `{postings, failures, scraped_at, refreshing}` |
 | POST | `/api/refresh` | Starts a scrape in the background (202) |
 | POST | `/api/visits` | Records a dashboard visit for the "New" badges |
 | GET | `/api/platforms` | Supported platforms, slug help and options |
@@ -351,10 +355,8 @@ doesn't run per PR.
 
 Milestone `v0.1`, one PR each:
 1. Milestone CI, issue and PR templates.
-2. Applications tab: status pipeline (saved, applied, screening, interviewing,
-   offer, accepted, rejected, withdrawn, ghosted), status history with notes,
-   manual entries for jobs found elsewhere. Marking a posting "Applied" copies
-   it into Applications.
+2. Applications (done: #2, #8, #9): status pipeline, status history with
+   notes, manual entries, and an "Applied" button on postings.
 3. Redis: shared per-board cache and lock, a per-host rate limiter shared
    across processes, and a scheduler lock.
 4. `scrape_runs` history and a health column for boards.

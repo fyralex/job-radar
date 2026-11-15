@@ -20,12 +20,13 @@ import {
   useGetSettingsQuery,
   useRefreshMutation,
 } from '../redux/api';
-import {matchesText, toggle} from '../lib';
+import {applyNotice, matchesText, toggle} from '../lib';
 import {isSeniorTitle} from '../seniority';
 import {MarksPanel} from './MarksPanel';
 import {PostingsList} from './PostingsList';
 
 const ALL = 'all';
+
 
 function ProfileTabs({
   profiles,
@@ -110,11 +111,7 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
   const onMark = (posting: Posting, status: MarkStatus) => void addMark({posting, status});
   const onApply = async (posting: Posting) => {
     const result = await applyToPosting(posting.posting_key);
-    setApplyMessage(
-      result.error
-        ? {text: `Couldn’t add “${posting.title}”: ${errorText(result.error)}`, error: true}
-        : {text: `Added “${posting.title}” to Applications as Applied.`, error: false},
-    );
+    setApplyMessage(applyNotice(posting.title, result.error));
   };
 
   if (!profilesLoading && profiles.length === 0) {

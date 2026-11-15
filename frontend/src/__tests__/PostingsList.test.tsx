@@ -1,7 +1,7 @@
 import {fireEvent, render, screen, within} from '@testing-library/react';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {PostingsList} from '../components/PostingsList';
-import {postedLabel, sortPostings} from '../lib';
+import {applyNotice, postedLabel, sortPostings} from '../lib';
 import {posting} from './factories';
 
 beforeAll(() => {
@@ -114,5 +114,30 @@ describe('PostingsList Applied button', () => {
     render(<PostingsList postings={[posting()]} />);
     expect(screen.queryByRole('button', {name: /^Applied to/})).toBeNull();
     expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+  });
+});
+
+describe('applyNotice', () => {
+  it('confirms a new application', () => {
+    expect(applyNotice('Analyst', undefined)).toEqual({
+      text: 'Added “Analyst” to Applications as Applied.',
+      error: false,
+    });
+  });
+
+  it('treats a 409 (already added, e.g. a double-click) as success', () => {
+    const conflict = {status: 409, data: {error: 'that posting already has an application'}};
+    expect(applyNotice('Analyst', conflict)).toEqual({
+      text: '“Analyst” is already in Applications.',
+      error: false,
+    });
+  });
+
+  it('shows other errors with the server message', () => {
+    expect(applyNotice('Analyst', {status: 400, data: {error: 'no posting with that posting_key'}})).toEqual({
+      text: 'Couldn’t add “Analyst”: no posting with that posting_key',
+      error: true,
+    });
+    expect(applyNotice('Analyst', {status: 'FETCH_ERROR', error: 'offline'}).error).toBe(true);
   });
 });

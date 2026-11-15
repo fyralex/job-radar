@@ -47,7 +47,8 @@ def posting_json(p: PostingView) -> dict[str, Any]:
 def get_postings() -> Any:
     """Open postings after the user's filters. Query params override the saved
     settings for this request only: maxAgeDays, employmentType, workType,
-    category (repeatable), local=true, profile=<id> (omit for every posting)."""
+    category (repeatable), local=true, profile=<id> (omit for every posting).
+    Marked postings and postings with an application are left out."""
     session = db()
     settings = get_settings(session)
     rule = location_rule(settings)

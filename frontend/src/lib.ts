@@ -1,4 +1,5 @@
 import type {Posting} from './datatypes';
+import {errorText} from './errors';
 
 // Pure helpers shared by components and tests.
 
@@ -73,4 +74,18 @@ export function formatDate(iso: string): string {
     month: 'short',
     day: 'numeric',
   });
+}
+
+// The notice after "Applied". A 409 means the posting is already in
+// Applications (e.g. the second request of a double-click), which is what the
+// user wanted, so it isn't shown as an error.
+export function applyNotice(
+  title: string,
+  error: Parameters<typeof errorText>[0],
+): {text: string; error: boolean} {
+  if (!error) return {text: `Added “${title}” to Applications as Applied.`, error: false};
+  if ('status' in error && error.status === 409) {
+    return {text: `“${title}” is already in Applications.`, error: false};
+  }
+  return {text: `Couldn’t add “${title}”: ${errorText(error)}`, error: true};
 }

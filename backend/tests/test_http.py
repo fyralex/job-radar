@@ -2,10 +2,25 @@
 
 from __future__ import annotations
 
+import threading
+import time
+from collections.abc import Iterator
+
 import pytest
+import redis
 import responses
 
-from job_radar.http import HostThrottle, HttpClient, RobotsCache, user_agent
+from job_radar.http import (
+    THROTTLE,
+    THROTTLE_KEY_PREFIX,
+    HostThrottle,
+    HttpClient,
+    RedisThrottle,
+    RobotsCache,
+    configure_throttle,
+    default_throttle,
+    user_agent,
+)
 from job_radar.sources.common import BoardFetchError
 
 URL = "https://api.example.com/v1/jobs"
@@ -103,3 +118,128 @@ def test_throttle_spaces_requests_per_host() -> None:
     throttle.wait("b.example.com")
     throttle.wait("a.example.com")
     assert slept == [1.0, 2.0]
+
+
+class RecordingThrottle:
+    def __init__(self) -> None:
+        self.hosts: list[str] = []
+
+    def wait(self, host: str) -> None:
+        self.hosts.append(host)
+
+
+@pytest.mark.redis
+def test_redis_throttle_spaces_requests_per_host(redis_url: str) -> None:
+    slept: list[float] = []
+    throttle = RedisThrottle(
+        redis.Redis.from_url(redis_url), interval=1.0, sleep=slept.append, local=RecordingThrottle()
+    )
+    throttle.wait("a.example.com")  # first request: no wait
+    throttle.wait("a.example.com")  # one slot later
+    throttle.wait("b.example.com")  # another host: no wait
+    throttle.wait("a.example.com")  # two slots later
+    assert len(slept) == 2
+    assert 0.9 < slept[0] <= 1.0
+    assert 1.9 < slept[1] <= 2.0
+
+
+@pytest.mark.redis
+def test_redis_throttle_is_shared_between_processes(redis_url: str) -> None:
+    # Two clients stand in for the worker and the API process.
+    worker_waits: list[float] = []
+    api_waits: list[float] = []
+    worker = RedisThrottle(redis.Redis.from_url(redis_url), sleep=worker_waits.append)
+    api = RedisThrottle(redis.Redis.from_url(redis_url), sleep=api_waits.append)
+    worker.wait("a.example.com")
+    api.wait("a.example.com")
+    assert worker_waits == []
+    assert len(api_waits) == 1 and 0.9 < api_waits[0] <= 1.0
+
+
+@pytest.mark.redis
+def test_redis_throttle_frees_the_slot_after_the_interval(redis_url: str) -> None:
+    slept: list[float] = []
+    throttle = RedisThrottle(redis.Redis.from_url(redis_url), interval=0.05, sleep=slept.append)
+    throttle.wait("a.example.com")
+    time.sleep(0.08)
+    throttle.wait("a.example.com")
+    assert slept == []
+    # The key expires on its own, so idle hosts leave nothing behind.
+    ttl = redis.Redis.from_url(redis_url).pttl(THROTTLE_KEY_PREFIX + "a.example.com")
+    assert 0 < ttl <= 1100
+
+
+def test_redis_throttle_still_throttles_locally_when_redis_is_down() -> None:
+    local = RecordingThrottle()
+    slept: list[float] = []
+    throttle = RedisThrottle(
+        redis.Redis.from_url("redis://127.0.0.1:1/0"), sleep=slept.append, local=local
+    )
+    throttle.wait("a.example.com")
+    assert local.hosts == ["a.example.com"]
+    assert slept == []
+
+
+@pytest.mark.redis
+def test_redis_throttle_keeps_spacing_when_redis_flaps(redis_url: str) -> None:
+    # Redis works, fails, then comes back empty (a restart): each request to
+    # the host must still wait its turn, through the local throttle.
+    local_slept: list[float] = []
+    local = HostThrottle(interval=1.0, clock=lambda: 0.0, sleep=local_slept.append)
+    client = redis.Redis.from_url(redis_url)
+    throttle = RedisThrottle(client, sleep=lambda _s: None, local=local)
+    working = throttle._reserve
+
+    def failing(**_kwargs: object) -> int:
+        raise redis.ConnectionError("Redis went away")
+
+    throttle.wait("a.example.com")  # Redis up
+    throttle._reserve = failing  # type: ignore[assignment]
+    throttle.wait("a.example.com")  # Redis down
+    throttle._reserve = working
+    client.flushdb()  # Redis back, with no memory of the host
+    throttle.wait("a.example.com")
+    assert local_slept == [1.0, 2.0]
+
+
+@pytest.fixture
+def restore_default_throttle() -> Iterator[None]:
+    yield
+    configure_throttle(None)
+
+
+@pytest.mark.usefixtures("restore_default_throttle")
+def test_configure_throttle_sets_the_default_for_new_clients() -> None:
+    assert default_throttle() is THROTTLE
+    assert HttpClient()._throttle is THROTTLE
+    shared = configure_throttle("redis://127.0.0.1:1/0")
+    assert isinstance(shared, RedisThrottle)
+    assert HttpClient()._throttle is shared
+    assert configure_throttle(None) is THROTTLE
+
+
+@pytest.mark.redis
+def test_redis_throttle_gives_concurrent_callers_distinct_slots(redis_url: str) -> None:
+    # Eight threads across two "processes" ask for the same host at once.
+    waits: list[float] = []
+    lock = threading.Lock()
+
+    def record(seconds: float) -> None:
+        with lock:
+            waits.append(seconds)
+
+    # No local throttle here: this checks the Redis side alone.
+    throttles = [
+        RedisThrottle(redis.Redis.from_url(redis_url), sleep=record, local=RecordingThrottle())
+        for _ in range(2)
+    ]
+    threads = [
+        threading.Thread(target=throttles[i % 2].wait, args=("a.example.com",)) for i in range(8)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    # One caller went straight away; the others got one slot each, 1s apart.
+    slots = sorted(round(w) for w in waits)
+    assert slots == [1, 2, 3, 4, 5, 6, 7]

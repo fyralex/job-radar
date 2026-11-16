@@ -144,6 +144,8 @@ export const DEFAULT_FILTERS: PostingFilters = {
   newOnly: false,
 };
 
+// Filters set for this visit. `hideSenior` is a remembered preference, not
+// counted here, so "Clear filters" doesn't show on every load because of it.
 export function hasActiveFilters(f: PostingFilters): boolean {
   return (
     f.text !== '' ||
@@ -151,7 +153,6 @@ export function hasActiveFilters(f: PostingFilters): boolean {
     f.workTypes.length > 0 ||
     f.employment.length > 0 ||
     f.localOnly ||
-    f.hideSenior ||
     f.newOnly
   );
 }

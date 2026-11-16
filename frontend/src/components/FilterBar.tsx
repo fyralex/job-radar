@@ -9,6 +9,8 @@ import {FilterMenu} from './FilterMenu';
 
 // The Postings filter bar: search, age and refresh on top; Work type,
 // Employment and More menus below, with "Clear filters" once anything is set.
+// "Hide senior roles" is a remembered preference, so Clear filters leaves it
+// alone and it doesn't count as a filter to clear (its menu still shows it).
 export function FilterBar({
   filters,
   onChange,
@@ -78,6 +80,7 @@ export function FilterBar({
         />
         <FilterMenu
           label="More"
+          align="right"
           options={[
             {
               key: 'local',
@@ -100,7 +103,11 @@ export function FilterBar({
           ]}
         />
         {hasActiveFilters(filters) && (
-          <button type="button" className="link-button" onClick={() => onChange(DEFAULT_FILTERS)}>
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => onChange({...DEFAULT_FILTERS, hideSenior: filters.hideSenior})}
+          >
             Clear filters
           </button>
         )}

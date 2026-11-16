@@ -21,12 +21,12 @@ function renderBar(filters: Partial<PostingFilters> = {}, extra: {refreshing?: b
 }
 
 describe('hasActiveFilters', () => {
-  it('is false only for the defaults', () => {
+  it('counts this visit\'s filters, not the remembered senior preference', () => {
     expect(hasActiveFilters(DEFAULT_FILTERS)).toBe(false);
     expect(hasActiveFilters({...DEFAULT_FILTERS, text: 'data'})).toBe(true);
     expect(hasActiveFilters({...DEFAULT_FILTERS, maxAge: 7})).toBe(true);
     expect(hasActiveFilters({...DEFAULT_FILTERS, workTypes: ['remote']})).toBe(true);
-    expect(hasActiveFilters({...DEFAULT_FILTERS, hideSenior: true})).toBe(true);
+    expect(hasActiveFilters({...DEFAULT_FILTERS, hideSenior: true})).toBe(false);
   });
 });
 
@@ -63,6 +63,27 @@ describe('FilterBar', () => {
     const {onChange} = renderBar({text: 'x', localOnly: true, employment: ['contract']});
     fireEvent.click(screen.getByRole('button', {name: 'Clear filters'}));
     expect(onChange).toHaveBeenCalledWith(DEFAULT_FILTERS);
+  });
+
+  it('Clear filters keeps the remembered "Hide senior roles"', () => {
+    const {onChange} = renderBar({text: 'x', hideSenior: true});
+    fireEvent.click(screen.getByRole('button', {name: 'Clear filters'}));
+    expect(onChange).toHaveBeenCalledWith({...DEFAULT_FILTERS, hideSenior: true});
+  });
+
+  it('does not offer Clear filters for the senior preference alone', () => {
+    renderBar({hideSenior: true});
+    expect(screen.queryByRole('button', {name: 'Clear filters'})).toBeNull();
+    expect(screen.getByRole('button', {name: /More/}).textContent).toContain('1');
+  });
+
+  it('opens the More panel from the right edge, so it stays on screen', () => {
+    renderBar();
+    fireEvent.click(screen.getByRole('button', {name: /More/}));
+    expect(screen.getByRole('group').className).toBe('filter-panel align-right');
+    fireEvent.click(screen.getByRole('button', {name: /More/}));
+    fireEvent.click(screen.getByRole('button', {name: /Work type/}));
+    expect(screen.getByRole('group').className).toBe('filter-panel');
   });
 
   it('refreshes on click', () => {
@@ -119,6 +140,22 @@ describe('FilterMenu', () => {
 
     fireEvent.click(button);
     fireEvent.click(button);
+    expect(screen.queryByRole('group')).toBeNull();
+  });
+
+  it('closes when keyboard focus leaves the menu, not when it moves inside', () => {
+    render(
+      <>
+        <FilterMenu label="Kind" options={options([])} />
+        <button type="button">elsewhere</button>
+      </>,
+    );
+    const button = screen.getByRole('button', {name: /Kind/});
+    fireEvent.click(button);
+    const box = screen.getByLabelText('A');
+    fireEvent.blur(button, {relatedTarget: box}); // Tab into the panel
+    expect(screen.getByRole('group')).toBeTruthy();
+    fireEvent.blur(box, {relatedTarget: screen.getByRole('button', {name: 'elsewhere'})});
     expect(screen.queryByRole('group')).toBeNull();
   });
 

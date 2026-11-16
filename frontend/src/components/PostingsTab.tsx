@@ -108,7 +108,6 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
   );
   const newCount = visible.filter((p) => p.is_new).length;
 
-
   const onMark = (posting: Posting, status: MarkStatus) => void addMark({posting, status});
   const onApply = async (posting: Posting) => {
     const result = await applyToPosting(posting.posting_key);

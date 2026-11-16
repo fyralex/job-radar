@@ -154,7 +154,9 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
   min-width: 180px; padding: 8px 12px; display: grid; gap: 6px;
   background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+  max-width: calc(100vw - 32px); /* never wider than the screen */
 }
+.filter-panel.align-right { left: auto; right: 0; }
 @media (max-width: 640px) {
   .refresh-button { margin-left: 0; }
   .filter-row input[type="search"] { flex-basis: 100%; }

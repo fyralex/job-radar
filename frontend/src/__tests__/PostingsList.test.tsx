@@ -73,9 +73,8 @@ describe('PostingsList', () => {
     const onMark = vi.fn();
     const p = posting();
     render(<PostingsList postings={[p]} onMark={onMark} />);
-    fireEvent.change(screen.getByLabelText(`Actions for ${p.title}`), {
-      target: {value: 'not_interested'},
-    });
+    fireEvent.click(screen.getByRole('button', {name: `Actions for ${p.title}`}));
+    fireEvent.click(screen.getByRole('button', {name: 'Not interested'}));
     expect(onMark).toHaveBeenCalledWith(p, 'not_interested');
   });
 });
@@ -92,22 +91,43 @@ function setScreen(narrow: boolean) {
 describe('PostingsList actions menu', () => {
   afterEach(() => setScreen(false));
 
-  it('offers Mark as applied and the hide choices in one menu', () => {
+  it('opens a panel of buttons; nothing happens until one is pressed', () => {
     const onApply = vi.fn();
     const onMark = vi.fn();
     const p = posting({title: 'Data Engineer'});
     render(<PostingsList postings={[p]} onApply={onApply} onMark={onMark} />);
-    const menu = screen.getByLabelText('Actions for Data Engineer');
-    expect(within(menu).getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'Actions…',
+    const toggle = screen.getByRole('button', {name: 'Actions for Data Engineer'});
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    // Keys on the closed button (an arrow press acted at once on the old select).
+    fireEvent.keyDown(toggle, {key: 'ArrowDown'});
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const panel = screen.getByRole('group', {name: 'Actions for Data Engineer'});
+    expect(within(panel).getAllByRole('button').map((b) => b.textContent)).toEqual([
       'Mark as applied',
       'Hide',
       'Not interested',
     ]);
-    fireEvent.change(menu, {target: {value: 'applied'}});
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onMark).not.toHaveBeenCalled();
+
+    fireEvent.click(within(panel).getByRole('button', {name: 'Mark as applied'}));
     expect(onApply).toHaveBeenCalledWith(p);
     expect(onMark).not.toHaveBeenCalled();
-    expect((menu as HTMLSelectElement).value).toBe(''); // back to "Actions…"
+    expect(screen.queryByRole('group')).toBeNull(); // closes after a choice
+  });
+
+  it('closes on Escape without acting', () => {
+    const onApply = vi.fn();
+    const p = posting({title: 'Analyst'});
+    render(<PostingsList postings={[p]} onApply={onApply} />);
+    const toggle = screen.getByRole('button', {name: 'Actions for Analyst'});
+    fireEvent.click(toggle);
+    fireEvent.keyDown(document, {key: 'Escape'});
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(document.activeElement).toBe(toggle);
+    expect(onApply).not.toHaveBeenCalled();
   });
 
   it('is the same menu on phone-width cards', () => {
@@ -116,13 +136,14 @@ describe('PostingsList actions menu', () => {
     const p = posting({title: 'Analyst'});
     render(<PostingsList postings={[p]} onApply={onApply} />);
     expect(screen.queryByRole('table')).toBeNull();
-    fireEvent.change(screen.getByLabelText('Actions for Analyst'), {target: {value: 'applied'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Actions for Analyst'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Mark as applied'}));
     expect(onApply).toHaveBeenCalledWith(p);
   });
 
   it('has no action column without handlers', () => {
     render(<PostingsList postings={[posting()]} />);
-    expect(screen.queryByLabelText(/^Actions for/)).toBeNull();
+    expect(screen.queryByRole('button', {name: /^Actions for/})).toBeNull();
     expect(screen.getAllByRole('columnheader')).toHaveLength(4);
   });
 });

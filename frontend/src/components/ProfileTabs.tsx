@@ -32,9 +32,12 @@ export function ProfileTabs({
         >
           {t.name}
           {counts && (
-            <span className="tab-count" aria-label={`${counts[t.key] ?? 0} postings`}>
-              {counts[t.key] ?? 0}
-            </span>
+            <>
+              <span className="tab-count" aria-hidden="true">
+                {counts[t.key] ?? 0}
+              </span>
+              <span className="visually-hidden">, {counts[t.key] ?? 0} postings</span>
+            </>
           )}
         </button>
       ))}

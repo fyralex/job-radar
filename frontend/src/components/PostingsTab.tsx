@@ -20,10 +20,9 @@ import {
 } from '../lib';
 import {isSeniorTitle} from '../seniority';
 import {FilterBar} from './FilterBar';
-import {ALL, ProfileTabs} from './ProfileTabs';
 import {MarksPanel} from './MarksPanel';
 import {PostingsList} from './PostingsList';
-
+import {ALL, ProfileTabs} from './ProfileTabs';
 
 export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
   const {data: profiles = [], isLoading: profilesLoading} = useGetProfilesQuery();

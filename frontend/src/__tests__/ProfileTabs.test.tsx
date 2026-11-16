@@ -25,11 +25,14 @@ describe('ProfileTabs', () => {
         onSelect={vi.fn()}
       />,
     );
-    const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Software40', 'Data7', 'All postings52']);
-    expect(screen.getByRole('tab', {name: /Data/}).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByRole('tab', {name: /Data/}).className).toBe('subtab active');
-    expect(screen.getByLabelText('40 postings')).toBeTruthy();
+    // Screen readers hear "Software, 40 postings"; the pill itself is hidden from them.
+    expect(screen.getByRole('tab', {name: 'Software , 40 postings'})).toBeTruthy();
+    expect(screen.getByRole('tab', {name: 'All postings , 52 postings'})).toBeTruthy();
+    const data = screen.getByRole('tab', {name: /^Data/});
+    expect(data.getAttribute('aria-selected')).toBe('true');
+    expect(data.className).toBe('subtab active');
+    expect(data.querySelector('.tab-count')?.textContent).toBe('7');
+    expect(data.querySelector('.tab-count')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('leaves the counts out until the postings have loaded', () => {

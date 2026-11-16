@@ -1,5 +1,6 @@
-import {useState} from 'react';
+import {useId, useState} from 'react';
 import {MARK_LABELS, type MarkStatus, type Posting} from '../datatypes';
+import {useDisclosure} from '../hooks/useDisclosure';
 import {useMediaQuery} from '../hooks/useMediaQuery';
 import {type SortKey, postedLabel, sortPostings} from '../lib';
 import {EmploymentBadge, WorkTypeBadge} from './Badges';
@@ -14,10 +15,10 @@ const COLUMNS: {key: SortKey; label: string}[] = [
   {key: 'posted', label: 'Posted'},
 ];
 
-type Action = 'applied' | MarkStatus;
-
-// One compact menu per posting: mark it Applied (copies it into
-// Applications) or hide it. It resets to "Actions" after each choice.
+// One compact menu per posting: a button that opens a small panel of
+// buttons. Nothing happens until an option is pressed (a select would act on
+// a single arrow key in some browsers), so marking a job applied is always a
+// deliberate choice.
 function ActionMenu({
   posting,
   onMark,
@@ -27,29 +28,46 @@ function ActionMenu({
   onMark?: OnMark;
   onApply?: OnApply;
 }) {
-  const choose = (action: Action) => {
-    if (action === 'applied') onApply?.(posting);
-    else onMark?.(posting, action);
+  const {open, setOpen, root, button, onBlur} = useDisclosure();
+  const panelId = useId();
+  const choose = (act: () => void) => {
+    setOpen(false);
+    act();
   };
   return (
-    <select
-      className="action-menu"
-      value=""
-      aria-label={`Actions for ${posting.title}`}
-      // Options come from the fixed list below, so the cast holds.
-      onChange={(e) => choose(e.target.value as Action)}
-    >
-      <option value="" disabled>
-        Actions…
-      </option>
-      {onApply && <option value="applied">Mark as applied</option>}
-      {onMark &&
-        (Object.keys(MARK_LABELS) as MarkStatus[]).map((status) => (
-          <option key={status} value={status}>
-            {MARK_LABELS[status]}
-          </option>
-        ))}
-    </select>
+    <div className="action-menu" ref={root} onBlur={onBlur}>
+      <button
+        ref={button}
+        type="button"
+        className="filter-button action-button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label={`Actions for ${posting.title}`}
+        onClick={() => setOpen(!open)}
+      >
+        Actions<span aria-hidden="true"> ▾</span>
+      </button>
+      {open && (
+        <div id={panelId} className="action-panel" role="group" aria-label={`Actions for ${posting.title}`}>
+          {onApply && (
+            <button type="button" onClick={() => choose(() => onApply(posting))}>
+              Mark as applied
+            </button>
+          )}
+          {onMark &&
+            (Object.keys(MARK_LABELS) as MarkStatus[]).map((status) => (
+              <button
+                key={status}
+                type="button"
+                className="secondary"
+                onClick={() => choose(() => onMark(posting, status))}
+              >
+                {MARK_LABELS[status]}
+              </button>
+            ))}
+        </div>
+      )}
+    </div>
   );
 }
 

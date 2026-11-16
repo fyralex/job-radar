@@ -60,10 +60,48 @@ in the UI and stored in PostgreSQL.
 | `POSTGRES_PASSWORD` | (required) | Password for the bundled PostgreSQL |
 | `POSTGRES_USER`, `POSTGRES_DB` | `jobradar` | PostgreSQL user and database |
 | `CONTACT_URL` | empty | Added to the scraper's User-Agent so board operators can see who is calling, e.g. the URL of your fork |
-| `HTTP_PORT` | `8080` | Port for the UI |
+| `HTTP_PORT` | `8080` | Port for the UI; `127.0.0.1:8080` listens on this machine only (see below) |
 | `SCRAPE_WORKERS` | `8` | Boards fetched in parallel (requests to one site still go one per second) |
 | `REDIS_URL` | set by Compose | Only needed when running the backend outside Compose |
 | `CORS_ORIGINS` | empty | Only needed when the UI is served from another origin |
+
+## Running it on a server
+
+Job Radar has **no login**: anyone who can reach its port sees your profiles
+and applications. On your own computer that's fine. On a server, keep it
+private:
+
+- **Listen on the machine only.** Set `HTTP_PORT=127.0.0.1:8080` in `.env`,
+  so the UI isn't reachable from other machines.
+- **Then reach it privately**, either over a private network such as
+  Tailscale or WireGuard, or through a reverse proxy that asks for a password
+  and adds HTTPS (for example Caddy with `basic_auth`, or nginx with
+  `auth_basic`). Don't expose the port to the internet as it is.
+
+**Back up** the database (Redis holds only short-lived locks, so it needs no
+backup):
+
+```bash
+docker compose exec -T postgres sh -c 'pg_dump --clean --if-exists -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup.sql
+```
+
+**Restore** a backup over the current data:
+
+```bash
+docker compose stop backend worker
+docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"' < backup.sql
+docker compose start backend worker
+```
+
+**Update** to a newer version (take a backup first):
+
+```bash
+git pull
+docker compose up -d --build    # database changes apply when the backend starts
+```
+
+The data lives in the `pgdata` Docker volume, so it survives restarts and
+rebuilds. `docker compose down -v` deletes it.
 
 ## How it works
 

@@ -86,22 +86,45 @@ server itself only. Then pick one way in:
 (Binding to a private address instead, e.g. `HTTP_PORT=<your WireGuard or
 Tailscale IP>:8080`, also works; any device on that network can then reach it.)
 
+Run these commands from the project folder, so they reach this install's
+database.
+
 **Back up** the database. Redis holds only short-lived locks and needs no
-backup. The dump holds your profiles, applications and notes, so it's written
-outside the project folder (never commit it) and readable only by you:
+backup. A dump holds your profiles, applications and notes, so each one goes
+to its own dated file outside the project folder (never commit it), readable
+only by you. It's written to a temporary file first, so a failed backup never
+replaces a good one:
 
 ```bash
-(umask 077; docker compose exec -T postgres sh -c 'pg_dump --clean --if-exists -U "$POSTGRES_USER" "$POSTGRES_DB"' > ~/job-radar-backup.sql)
+(umask 077; mkdir -p ~/job-radar-backups
+ f=~/job-radar-backups/job-radar-$(date +%F-%H%M).sql
+ docker compose exec -T postgres sh -c 'pg_dump --clean --if-exists -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$f.tmp" && mv "$f.tmp" "$f")
 ```
 
-**Restore** a backup over the current data. A backup restores into the
-version it was taken from, so restore it before updating, not after:
+A leftover `.tmp` file is a backup that failed and can be deleted. (An older
+version of these steps wrote a single `~/job-radar-backup.sql`; move it into
+`~/job-radar-backups/` or delete it.)
+
+**Restore** a backup. Set `f` to the file you want. The backup is checked
+first (it must end with pg_dump's "dump complete" line), then the database is
+emptied and the backup loaded in one transaction, so anything that goes wrong
+leaves your current data exactly as it was:
 
 ```bash
+f=~/job-radar-backups/job-radar-YYYY-MM-DD-HHMM.sql   # the backup to restore
 docker compose stop backend worker
-docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"' < ~/job-radar-backup.sql
+if tail -n 20 "$f" 2>/dev/null | grep -q 'PostgreSQL database dump complete'; then
+  { echo 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'; cat "$f"; } |
+    docker compose exec -T postgres sh -c 'psql -q -1 -v ON_ERROR_STOP=1 -o /dev/null -f - -U "$POSTGRES_USER" "$POSTGRES_DB"' \
+    && echo "Restored." || echo "Restore failed: nothing was changed."
+else
+  echo "Not a complete backup, nothing was changed: $f"
+fi
 docker compose start backend worker
 ```
+
+A backup works with the version it was taken with or any newer one (the
+backend brings the data up to date when it starts), but not with an older one.
 
 **Update** to a newer version (take a backup first):
 
@@ -109,6 +132,21 @@ docker compose start backend worker
 git pull
 docker compose up -d --build    # database changes apply when the backend starts
 ```
+
+**Roll back** an update that went wrong: restore the backup you took before
+it (the steps above, but leave out the last line, so the backend and worker
+stay stopped). Go on only if it printed "Restored."; otherwise your data is
+untouched, so start the current version again with
+`docker compose start backend worker`. Then go back to the version you were on
+and start it:
+
+```bash
+git checkout v0.1.0             # the release or commit you were on before
+docker compose up -d --build
+```
+
+This leaves git on that release. To update again later, run
+`git checkout main` before `git pull`.
 
 The data lives in the `pgdata` Docker volume, so it survives restarts and
 rebuilds. `docker compose down -v` deletes it.

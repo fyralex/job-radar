@@ -376,7 +376,7 @@ Milestone `v0.1`, one PR each:
    rate limiter shared across processes. A per-board result cache (#19) was
    dropped: "Refresh now" resets the scrape timer, so it could never be used.
 4. Done: `scrape_runs` history (#4) and a health column for boards (#27).
-5. README with a screenshot, architecture diagram and quick start.
+5. Done: README with a screenshot, architecture diagram and quick start (#5).
 
 Later: more platforms, one PR each and only after the owner approves the
 platform.

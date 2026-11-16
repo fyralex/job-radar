@@ -17,6 +17,7 @@ from job_radar.coordination import make_locks
 from job_radar.db import make_engine, make_session_factory, session_scope
 from job_radar.http import configure_throttle
 from job_radar.models import utcnow
+from job_radar.services.board_cache import make_board_cache
 from job_radar.services.refresh import run_scrape, scrape_due
 from job_radar.services.settings_repo import get_settings
 
@@ -30,6 +31,7 @@ def main() -> None:
     factory = make_session_factory(make_engine(config.database_url))
     locks = make_locks(config.redis_url)
     configure_throttle(config.redis_url)  # share the per-host rate limit with the API
+    cache = make_board_cache(config.redis_url, config.cache_ttl_seconds)
     stop = threading.Event()
 
     def _stop(_signum: int, _frame: FrameType | None) -> None:
@@ -46,15 +48,22 @@ def main() -> None:
                     settings.last_full_scrape_at, settings.scrape_interval_hours, utcnow()
                 )
             if due:
+                # Scheduled runs reuse boards fetched recently (e.g. by Refresh now).
                 summary = run_scrape(
-                    factory, config.contact_url, config.scrape_workers, locks=locks
+                    factory,
+                    config.contact_url,
+                    config.scrape_workers,
+                    locks=locks,
+                    cache=cache,
+                    use_cache=True,
                 )
                 if summary:
                     logger.info(
-                        "scraped %s boards (%s failed, %s skipped), %s postings",
+                        "scraped %s boards (%s failed, %s skipped, %s from cache), %s postings",
                         summary.boards,
                         summary.failed,
                         summary.skipped,
+                        summary.cached,
                         summary.postings,
                     )
                 else:

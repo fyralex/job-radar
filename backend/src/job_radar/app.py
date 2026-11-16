@@ -14,6 +14,7 @@ from werkzeug.exceptions import HTTPException
 from job_radar.config import Config
 from job_radar.coordination import Locks, make_locks
 from job_radar.db import make_engine, make_session_factory
+from job_radar.services.board_cache import BoardCache, make_board_cache
 
 EXTENSION = "job_radar"
 
@@ -24,6 +25,7 @@ class AppState:
     engine: Engine
     sessions: sessionmaker[Session]
     locks: Locks
+    cache: BoardCache | None
 
 
 def state() -> AppState:
@@ -56,6 +58,7 @@ def create_app(
         engine,
         sessions or make_session_factory(engine),
         locks or make_locks(config.redis_url),
+        make_board_cache(config.redis_url, config.cache_ttl_seconds),
     )
     logging.basicConfig(level=logging.INFO)
 

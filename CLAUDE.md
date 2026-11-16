@@ -164,6 +164,7 @@ backend/src/job_radar/
   services/
     scraper.py        fetch boards in parallel (8 threads, one client per board)
     refresh.py        one scrape run: fetch, store, record each board's status
+    board_cache.py    per-board result cache in Redis (scheduled runs reuse it)
     postings_repo.py  upsert postings with first_seen / last_seen / closed_at
     location.py       LocationRule built from the user's settings
     matching.py       job profiles (title terms) and presets
@@ -293,7 +294,7 @@ exactly. The API has one consumer, so there's no camelCase layer.
 
 | File | In git? | Holds |
 |---|---|---|
-| `.env.example` | yes | Placeholders: Postgres credentials, `REDIS_URL` (compose sets its own), `CONTACT_URL`, `HTTP_PORT`, `SCRAPE_WORKERS`, `CORS_ORIGINS` |
+| `.env.example` | yes | Placeholders: Postgres credentials, `REDIS_URL` (compose sets its own), `CONTACT_URL`, `HTTP_PORT`, `SCRAPE_WORKERS`, `CACHE_TTL_SECONDS`, `CORS_ORIGINS` |
 | `.env` | **no** | Real values |
 | `config/boards.example.yaml` | yes | Demo boards, at least one per platform |
 | `config/boards.yaml` | **no** | The owner's own board list, imported with `flask boards import` |
@@ -369,7 +370,9 @@ Milestone `v0.1`, one PR each:
 2. Applications (done: #2, #8, #9): status pipeline, status history with
    notes, manual entries, and an "Applied" button on postings.
 3. Redis: run and per-board locks and health (#3), a per-host rate limiter
-   shared across processes (#16), and a per-board result cache (#19).
+   shared across processes (#16), and a per-board result cache (#19): a
+   successful fetch is kept for `CACHE_TTL_SECONDS` (3h); scheduled runs reuse
+   it, "Refresh now" and `flask scrape` always fetch and refill it.
 4. `scrape_runs` history and a health column for boards.
 5. README with a screenshot, architecture diagram and quick start.
 

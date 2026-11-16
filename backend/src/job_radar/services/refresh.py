@@ -27,6 +27,7 @@ from job_radar.coordination import (
 from job_radar.db import session_scope
 from job_radar.http import HttpClient
 from job_radar.models import BoardRow, utcnow
+from job_radar.services.board_cache import BoardCache
 from job_radar.services.boards_repo import to_board
 from job_radar.services.postings_repo import upsert_board_postings
 from job_radar.services.scraper import ClientFactory, fetch_boards
@@ -42,6 +43,7 @@ class RunSummary:
     postings: int
     finished_at: datetime
     skipped: int = 0
+    cached: int = 0  # boards served from the cache instead of fetched
 
 
 def is_running(locks: Locks = LOCAL_LOCKS) -> bool:
@@ -56,9 +58,13 @@ def run_scrape(
     board_ids: Collection[int] | None = None,
     client_factory: ClientFactory | None = None,
     locks: Locks = LOCAL_LOCKS,
+    cache: BoardCache | None = None,
+    use_cache: bool = False,
 ) -> RunSummary | None:
     """Scrape now. Returns None if a run is already in progress anywhere (or
-    Redis is unreachable, so the run lock can't be taken)."""
+    Redis is unreachable, so the run lock can't be taken). Successful fetches
+    go into `cache`; with `use_cache` (scheduled runs), cached boards aren't
+    fetched again."""
     token = locks.acquire(RUN_LOCK, RUN_LOCK_TTL_SECONDS)
     if token is None:
         return None
@@ -70,6 +76,8 @@ def run_scrape(
         client_factory=client_factory,
         locks=locks,
         token=token,
+        cache=cache,
+        use_cache=use_cache,
     )
 
 
@@ -82,6 +90,8 @@ def _run_holding_lock(
     client_factory: ClientFactory | None,
     locks: Locks,
     token: str,
+    cache: BoardCache | None = None,
+    use_cache: bool = False,
 ) -> RunSummary:
     """The run itself, by a caller that already holds the run lock (`token`).
     Releases the lock when done."""
@@ -97,6 +107,8 @@ def _run_holding_lock(
             client_factory or (lambda: HttpClient(contact_url)),
             workers=workers,
             locks=locks,
+            cache=cache,
+            use_cache=use_cache,
         )
 
         now = utcnow()
@@ -126,7 +138,8 @@ def _run_holding_lock(
             # hasn't really scraped: keep it due so the worker tries again soon.
             if board_ids is None and skipped < len(results):
                 get_settings(session).last_full_scrape_at = now
-        return RunSummary(len(results), failed, total, now, skipped)
+        cached = sum(1 for r in results if r.cached)
+        return RunSummary(len(results), failed, total, now, skipped, cached)
     finally:
         locks.release(RUN_LOCK, token)
 
@@ -141,10 +154,13 @@ def start_in_background(
     factory: sessionmaker[Session],
     contact_url: str | None,
     workers: int = 8,
+    *,
     board_ids: Collection[int] | None = None,
     locks: Locks = LOCAL_LOCKS,
+    cache: BoardCache | None = None,
 ) -> bool:
-    """Kick off a run on a daemon thread. False if one is already running, or
+    """Kick off a run on a daemon thread ("Refresh now": it fetches every
+    board, ignoring the cache, and stores the results in it). False if one is already running, or
     if Redis is down so the run lock can't be taken. The lock is taken here,
     before the thread starts, so "started" always means a run is happening."""
     token = locks.acquire(RUN_LOCK, RUN_LOCK_TTL_SECONDS)
@@ -159,6 +175,7 @@ def start_in_background(
             "client_factory": None,
             "locks": locks,
             "token": token,
+            "cache": cache,
         },
         name="scrape",
         daemon=True,

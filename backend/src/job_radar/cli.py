@@ -61,6 +61,7 @@ def register_cli(app: Flask) -> None:
             app_state.config.contact_url,
             app_state.config.scrape_workers,
             locks=app_state.locks,
+            cache=app_state.cache,  # fetches everything, refreshes the cache
         )
         if summary is None:
             raise click.ClickException("a scrape is already running")

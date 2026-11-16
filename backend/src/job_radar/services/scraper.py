@@ -8,6 +8,10 @@ reported with its error and never cached; the next run tries it again.
 
 With `locks`, each board is fetched under its board lock. A board whose lock
 is held elsewhere is skipped (`skipped=True`), not reported as failed.
+
+With `cache`, every successful fetch is stored; with `use_cache` too, a
+cached result is used instead of fetching (`cached=True`). See
+`services/board_cache.py`.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from dataclasses import dataclass
 
 from job_radar.coordination import BOARD_LOCK_TTL_SECONDS, Locks, board_lock, holding
 from job_radar.http import HttpClient
+from job_radar.services.board_cache import BoardCache
 from job_radar.sources import get_platform
 from job_radar.sources.common import Board, BoardFetchError, RawPosting
 
@@ -35,6 +40,7 @@ class BoardResult:
     error: str | None
     seconds: float
     skipped: bool = False  # another process holds this board's lock
+    cached: bool = False  # served from the board cache, not fetched
 
     @property
     def ok(self) -> bool:
@@ -69,14 +75,25 @@ def fetch_boards(
     client_factory: ClientFactory,
     workers: int = 8,
     locks: Locks | None = None,
+    cache: BoardCache | None = None,
+    *,
+    use_cache: bool = False,
 ) -> list[BoardResult]:
     if not boards:
         return []
 
     def fetch(board: Board) -> BoardResult:
+        if cache is not None and use_cache:
+            hit = cache.get(board)
+            if hit is not None:
+                return BoardResult(board, hit, None, 0.0, cached=True)
         if locks is None:
-            return fetch_one(board, client_factory)
-        return _fetch_locked(board, client_factory, locks)
+            result = fetch_one(board, client_factory)
+        else:
+            result = _fetch_locked(board, client_factory, locks)
+        if cache is not None and result.ok:  # failures are never cached
+            cache.put(board, result.postings)
+        return result
 
     with ThreadPoolExecutor(max_workers=max(1, min(workers, len(boards)))) as pool:
         return list(pool.map(fetch, boards))

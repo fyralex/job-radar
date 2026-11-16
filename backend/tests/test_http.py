@@ -8,6 +8,7 @@ from collections.abc import Iterator
 
 import pytest
 import redis
+import requests
 import responses
 
 from job_radar.http import (
@@ -243,3 +244,63 @@ def test_redis_throttle_gives_concurrent_callers_distinct_slots(redis_url: str) 
     # One caller went straight away; the others got one slot each, 1s apart.
     slots = sorted(round(w) for w in waits)
     assert slots == [1, 2, 3, 4, 5, 6, 7]
+
+
+class EventThrottle:
+    """Records each wait into a shared event log, next to the requests sent."""
+
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    def wait(self, host: str) -> None:
+        self.events.append(f"wait {host}")
+
+
+@responses.activate
+def test_robots_fetch_takes_its_own_throttle_slot() -> None:
+    events: list[str] = []
+
+    def record(request: requests.PreparedRequest) -> tuple[int, dict[str, str], str]:
+        events.append(f"GET {request.url}")
+        return (200, {}, "{}" if request.url == URL else "")
+
+    responses.add_callback(responses.GET, ROBOTS, callback=record)
+    responses.add_callback(responses.GET, URL, callback=record)
+    client = HttpClient(robots=RobotsCache(), throttle=EventThrottle(events), sleep=lambda _s: None)
+    client.get(URL)
+    # Cold cache: robots.txt waits for a slot, then the request waits for the next.
+    assert events == [
+        "wait api.example.com",
+        f"GET {ROBOTS}",
+        "wait api.example.com",
+        f"GET {URL}",
+    ]
+    events.clear()
+    client.get(URL)
+    # Warm cache: one slot, one request.
+    assert events == ["wait api.example.com", f"GET {URL}"]
+
+
+@responses.activate
+def test_retries_each_take_a_throttle_slot() -> None:
+    events: list[str] = []
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=503)
+    responses.get(URL, json={"ok": True})
+    client = HttpClient(robots=RobotsCache(), throttle=EventThrottle(events), sleep=lambda _s: None)
+    assert client.get_json(URL) == {"ok": True}
+    # robots.txt, the 503, and the retry: three slots for three requests.
+    assert events == ["wait api.example.com"] * 3
+
+
+@responses.activate
+def test_cached_disallow_sends_nothing_and_waits_for_nothing() -> None:
+    events: list[str] = []
+    responses.get(ROBOTS, body="User-agent: *\nDisallow: /\n")
+    client = HttpClient(robots=RobotsCache(), throttle=EventThrottle(events), sleep=lambda _s: None)
+    with pytest.raises(BoardFetchError):
+        client.get(URL)
+    assert events == ["wait api.example.com"]  # only for robots.txt itself
+    with pytest.raises(BoardFetchError):
+        client.get(URL)
+    assert events == ["wait api.example.com"]

@@ -42,6 +42,7 @@ export interface Posting {
   first_seen_at: string;
   is_new: boolean;
   local: boolean;
+  profile_ids: number[]; // enabled job profiles whose title terms this posting matches
 }
 
 export interface BoardFailure {

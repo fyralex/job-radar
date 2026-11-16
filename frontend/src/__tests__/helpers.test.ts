@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {matchesText, parseTerms, refreshNotice, splitList, toggle} from '../lib';
+import {countByProfile, matchesText, parseTerms, refreshNotice, splitList, toggle} from '../lib';
 import {postingsParams} from '../redux/api';
 import {posting} from './factories';
 
@@ -60,5 +60,17 @@ describe('refreshNotice', () => {
     expect(refreshNotice(undefined, {status: 500, data: {error: 'boom'}})).toBe(
       'Couldn’t start a refresh: boom',
     );
+  });
+});
+
+describe('countByProfile', () => {
+  it('counts each profile tab and all postings', () => {
+    const postings = [
+      posting({profile_ids: [1, 2]}),
+      posting({profile_ids: [1]}),
+      posting({profile_ids: []}),
+    ];
+    expect(countByProfile(postings, [1, 2, 3])).toEqual({all: 3, '1': 2, '2': 1, '3': 0});
+    expect(countByProfile([], [1])).toEqual({all: 0, '1': 0});
   });
 });

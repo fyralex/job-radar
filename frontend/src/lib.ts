@@ -156,3 +156,12 @@ export function hasActiveFilters(f: PostingFilters): boolean {
     f.newOnly
   );
 }
+
+// How many postings each job profile tab would show, plus "all".
+export function countByProfile(postings: Posting[], profileIds: number[]): Record<string, number> {
+  const counts: Record<string, number> = {all: postings.length};
+  for (const id of profileIds) {
+    counts[String(id)] = postings.filter((p) => p.profile_ids.includes(id)).length;
+  }
+  return counts;
+}

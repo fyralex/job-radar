@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useState} from 'react';
-import type {MarkStatus, Posting, Profile} from '../datatypes';
+import type {MarkStatus, Posting} from '../datatypes';
 import {errorText} from '../errors';
 import {useLocalPreference} from '../hooks/useLocalPreference';
 import {
@@ -14,6 +14,7 @@ import {
   DEFAULT_FILTERS,
   type PostingFilters,
   applyNotice,
+  countByProfile,
   matchesText,
   refreshNotice,
 } from '../lib';
@@ -21,37 +22,7 @@ import {isSeniorTitle} from '../seniority';
 import {FilterBar} from './FilterBar';
 import {MarksPanel} from './MarksPanel';
 import {PostingsList} from './PostingsList';
-
-const ALL = 'all';
-
-function ProfileTabs({
-  profiles,
-  selected,
-  onSelect,
-}: {
-  profiles: Profile[];
-  selected: string;
-  onSelect: (key: string) => void;
-}) {
-  const tabs = [...profiles.filter((p) => p.enabled).map((p) => ({key: String(p.id), name: p.name}))];
-  tabs.push({key: ALL, name: 'All postings'});
-  return (
-    <div className="subtabs" role="tablist" aria-label="Job profiles">
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          role="tab"
-          type="button"
-          aria-selected={selected === t.key}
-          className={selected === t.key ? 'subtab active' : 'subtab'}
-          onClick={() => onSelect(t.key)}
-        >
-          {t.name}
-        </button>
-      ))}
-    </div>
-  );
-}
+import {ALL, ProfileTabs} from './ProfileTabs';
 
 export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
   const {data: profiles = [], isLoading: profilesLoading} = useGetProfilesQuery();
@@ -74,8 +45,9 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
       ? Number(selected)
       : undefined;
 
+  // Every posting, each tagged with its matching profiles: tabs switch and
+  // count without another request.
   const postings = useGetPostingsQuery({
-    profile: profileId,
     maxAgeDays: maxAge,
     workType: workTypes,
     employmentType: employment,
@@ -96,7 +68,8 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
     return () => window.clearInterval(timer);
   }, [refreshing, refetch]);
 
-  const visible = useMemo(
+  // The bar's in-browser filters, before choosing a profile tab.
+  const filtered = useMemo(
     () =>
       (postings.data?.postings ?? []).filter(
         (p) =>
@@ -106,6 +79,17 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
       ),
     [postings.data, includeSenior, newOnly, text],
   );
+  const visible = useMemo(
+    () =>
+      profileId === undefined ? filtered : filtered.filter((p) => p.profile_ids.includes(profileId)),
+    [filtered, profileId],
+  );
+  const counts = postings.data
+    ? countByProfile(
+        filtered,
+        enabledProfiles.map((p) => p.id),
+      )
+    : null;
   const newCount = visible.filter((p) => p.is_new).length;
 
   const onMark = (posting: Posting, status: MarkStatus) => void addMark({posting, status});
@@ -133,6 +117,7 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
       <ProfileTabs
         profiles={profiles}
         selected={profileId === undefined ? ALL : selected}
+        counts={counts}
         onSelect={setSelected}
       />
 

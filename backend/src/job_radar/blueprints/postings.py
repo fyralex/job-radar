@@ -14,7 +14,7 @@ from job_radar.services.boards_repo import list_boards
 from job_radar.services.filters import PostingView, ViewFilters, apply_filters
 from job_radar.services.marks_repo import hidden_keys
 from job_radar.services.postings_repo import open_postings
-from job_radar.services.profiles_repo import matcher_for
+from job_radar.services.profiles_repo import list_profiles, matcher_for
 from job_radar.services.refresh import is_running, start_in_background
 from job_radar.services.settings_repo import get_settings, location_rule, record_visit
 from job_radar.services.work_type import WORK_TYPES
@@ -23,7 +23,7 @@ from job_radar.sources.common import EMPLOYMENT_TYPES
 bp = Blueprint("postings", __name__, url_prefix="/api")
 
 
-def posting_json(p: PostingView) -> dict[str, Any]:
+def posting_json(p: PostingView, profile_ids: list[int]) -> dict[str, Any]:
     return {
         "id": p.id,
         "posting_key": p.posting_key,
@@ -40,6 +40,9 @@ def posting_json(p: PostingView) -> dict[str, Any]:
         "first_seen_at": p.first_seen_at.isoformat(),
         "is_new": p.is_new,
         "local": p.local,
+        # Enabled profiles whose title terms this posting matches, so the UI
+        # can switch profile tabs and count each one without new requests.
+        "profile_ids": profile_ids,
     }
 
 
@@ -48,7 +51,8 @@ def get_postings() -> Any:
     """Open postings after the user's filters. Query params override the saved
     settings for this request only: maxAgeDays, employmentType, workType,
     category (repeatable), local=true, profile=<id> (omit for every posting).
-    Marked postings and postings with an application are left out."""
+    Marked postings and postings with an application are left out. Each
+    posting lists the enabled profiles it matches (`profile_ids`)."""
     session = db()
     settings = get_settings(session)
     rule = location_rule(settings)
@@ -85,8 +89,11 @@ def get_postings() -> Any:
         for b in list_boards(session)
         if b.enabled and b.last_status == "error"
     ]
+    matchers = [(row.id, matcher_for(row)) for row in list_profiles(session) if row.enabled]
     return jsonify(
-        postings=[posting_json(p) for p in views],
+        postings=[
+            posting_json(p, [pid for pid, m in matchers if m.matches(p.title)]) for p in views
+        ],
         failures=failures,
         scraped_at=settings.last_full_scrape_at.isoformat()
         if settings.last_full_scrape_at

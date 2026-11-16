@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -179,3 +180,20 @@ class ApplicationEventRow(Base):
     at: Mapped[datetime] = mapped_column(default=utcnow)
 
     application: Mapped[ApplicationRow] = relationship(back_populates="events")
+
+
+class ScrapeRunRow(Base):
+    """One board's outcome in one scrape run. Pruned after 30 days
+    (`services/runs_repo.py`); the board's latest outcome also stays on
+    `boards.last_*`."""
+
+    __tablename__ = "scrape_runs"
+    __table_args__ = (Index("ix_scrape_runs_board_started", "board_id", "started_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey("boards.id", ondelete="CASCADE"))
+    started_at: Mapped[datetime] = mapped_column(index=True)
+    finished_at: Mapped[datetime]
+    status: Mapped[str] = mapped_column(String(20))  # ok | error
+    count: Mapped[int | None] = mapped_column(Integer, default=None)
+    error: Mapped[str | None] = mapped_column(Text, default=None)

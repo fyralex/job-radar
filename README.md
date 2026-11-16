@@ -10,13 +10,18 @@ saved to offer.
 
 - **Your preferences, not hardcoded ones.** Job profiles hold the title terms
   you care about. Start from a preset (software engineering, biostatistics,
-  HEOR/real-world evidence) or write your own.
+  HEOR/real-world evidence) or write your own. Each profile is a tab with its
+  own posting count.
+- **Filters that stay out of the way.** Search by words, set the posting age,
+  and narrow by work type, employment type, local only, new only, or hide
+  senior roles. Long lists scroll in their own box with the headers in view.
 - **Location that understands remote.** List the states and cities you'd work
   in on site. Remote jobs count only when they're open across the US, or
   limited to a state you listed.
-- **Applications.** Mark a posting "Applied" or add a job you found elsewhere,
-  then move it through saved, applied, screening, interviewing, offer and the
-  rest, with a dated history and notes.
+- **Applications.** Use a posting's **Actions** menu to mark it applied, or
+  add a job you found elsewhere. Then move it through saved, applied,
+  screening, interviewing, offer and the rest, with a dated history and notes.
+  The same menu hides postings you don't want.
 - **Board health.** Settings shows each board's last few refreshes, so a board
   that stopped working is easy to spot.
 - **Polite by design.** It reads only public job-board feeds, identifies itself

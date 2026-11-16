@@ -141,3 +141,25 @@ describe('applyNotice', () => {
     expect(applyNotice('Analyst', {status: 'FETCH_ERROR', error: 'offline'}).error).toBe(true);
   });
 });
+
+describe('PostingsList scroll area', () => {
+  afterEach(() => setScreen(false));
+
+  it('puts the table in a focusable scroll region with its own headers', () => {
+    render(<PostingsList postings={[posting()]} />);
+    const region = screen.getByRole('region', {name: 'Postings'});
+    expect(region.className).toContain('scroll-area');
+    expect(region.getAttribute('tabindex')).toBe('0'); // keyboard users can scroll it
+    expect(within(region).getByRole('table')).toBeTruthy();
+    expect(within(region).getAllByRole('columnheader')).toHaveLength(4);
+  });
+
+  it('scrolls the phone cards the same way, with the sort menu outside', () => {
+    setScreen(true);
+    render(<PostingsList postings={[posting()]} />);
+    const region = screen.getByRole('region', {name: 'Postings'});
+    expect(within(region).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(region).queryByLabelText(/Sort by/)).toBeNull();
+    expect(screen.getByLabelText(/Sort by/)).toBeTruthy();
+  });
+});

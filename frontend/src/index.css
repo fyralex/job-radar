@@ -85,6 +85,22 @@ legend { font-weight: 600; padding: 0 4px; }
 .profile-form, .board-form, .settings-form { margin-top: 12px; }
 
 .table-scroll { overflow-x: auto; }
+/* Long lists scroll inside their own box so the filters above stay on screen;
+   column headers stick to the top of the box. */
+.scroll-area {
+  max-height: 70vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px;
+  overscroll-behavior: contain;
+}
+.scroll-area-short { max-height: 55vh; }
+.scroll-area:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scroll-area .cards { margin: 0; padding: 10px; }
+.scroll-area th {
+  position: sticky; top: 0; z-index: 1; background: var(--surface);
+  /* border-collapse drops a sticky cell's border; draw it as a shadow instead */
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+.scroll-area tr:last-child td { border-bottom: none; }
+@media (max-width: 640px) { .scroll-area { max-height: 65vh; } }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .sort-button { background: none; border: none; color: var(--text); font-weight: 600; padding: 0; }

@@ -178,7 +178,7 @@ frontend/src/
   redux/api.ts        RTK Query endpoints
   datatypes.ts        mirrors the API's JSON (snake_case)
   lib.ts              pure helpers (sorting, text filter, form parsing)
-  components/         PostingsTab, PostingsList, MarksPanel, ProfilesEditor,
+  components/         PostingsTab, FilterBar, FilterMenu, PostingsList, MarksPanel, ProfilesEditor,
                       BoardsEditor, BoardHealth, SearchSettingsForm, Badges,
                       ApplicationsTab, ApplicationsList, ApplicationDetail,
                       AddApplicationForm

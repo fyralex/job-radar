@@ -1,4 +1,10 @@
-import type {Posting, RefreshResult, ScrapeRun} from './datatypes';
+import type {
+  EmploymentType,
+  Posting,
+  RefreshResult,
+  ScrapeRun,
+  WorkType,
+} from './datatypes';
 import {errorText} from './errors';
 
 // Pure helpers shared by components and tests.
@@ -114,4 +120,39 @@ export function runLabel(run: ScrapeRun): string {
   if (run.status === 'error') return `${when}: failed (${run.error ?? 'unknown error'})`;
   const count = run.count ?? 0;
   return `${when}: ${count} ${count === 1 ? 'posting' : 'postings'}`;
+}
+
+// Everything the Postings filter bar sets. `maxAge` undefined means "use the
+// saved setting".
+export interface PostingFilters {
+  text: string;
+  maxAge: number | undefined;
+  workTypes: WorkType[];
+  employment: EmploymentType[];
+  localOnly: boolean;
+  hideSenior: boolean;
+  newOnly: boolean;
+}
+
+export const DEFAULT_FILTERS: PostingFilters = {
+  text: '',
+  maxAge: undefined,
+  workTypes: [],
+  employment: [],
+  localOnly: false,
+  hideSenior: false,
+  newOnly: false,
+};
+
+// Filters set for this visit. `hideSenior` is a remembered preference, not
+// counted here, so "Clear filters" doesn't show on every load because of it.
+export function hasActiveFilters(f: PostingFilters): boolean {
+  return (
+    f.text !== '' ||
+    f.maxAge !== undefined ||
+    f.workTypes.length > 0 ||
+    f.employment.length > 0 ||
+    f.localOnly ||
+    f.newOnly
+  );
 }

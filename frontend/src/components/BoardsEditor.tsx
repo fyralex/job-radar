@@ -171,7 +171,12 @@ export function BoardsEditor() {
           Couldn’t remove the board: {removal.error}
         </p>
       )}
-      <div className="table-scroll">
+      <div
+        className="table-scroll scroll-area scroll-area-short"
+        role="region"
+        aria-label="Boards you follow"
+        tabIndex={0}
+      >
         <table className="boards">
           <thead>
             <tr>

@@ -114,30 +114,32 @@ export function PostingsList({
             <option value="location:asc">Location A-Z</option>
           </select>
         </label>
-        <ul className="cards">
-          {sorted.map((p) => (
-            <li key={p.posting_key} className="card">
-              <a href={p.url} target="_blank" rel="noreferrer" className="card-title">
-                {p.is_new && <span className="new-badge">New</span>}
-                {p.title}
-              </a>
-              <div className="card-meta">
-                <span>{p.org}</span>
-                <span>
-                  <Location posting={p} />
-                </span>
-                <span>{postedLabel(p)}</span>
-              </div>
-              {hasActions && <Actions posting={p} onMark={onMark} onApply={onApply} />}
-            </li>
-          ))}
-        </ul>
+        <div className="scroll-area" role="region" aria-label="Postings" tabIndex={0}>
+          <ul className="cards">
+            {sorted.map((p) => (
+              <li key={p.posting_key} className="card">
+                <a href={p.url} target="_blank" rel="noreferrer" className="card-title">
+                  {p.is_new && <span className="new-badge">New</span>}
+                  {p.title}
+                </a>
+                <div className="card-meta">
+                  <span>{p.org}</span>
+                  <span>
+                    <Location posting={p} />
+                  </span>
+                  <span>{postedLabel(p)}</span>
+                </div>
+                {hasActions && <Actions posting={p} onMark={onMark} onApply={onApply} />}
+              </li>
+            ))}
+          </ul>
+        </div>
       </>
     );
   }
 
   return (
-    <div className="table-scroll">
+    <div className="table-scroll scroll-area" role="region" aria-label="Postings" tabIndex={0}>
       <table className="postings">
         <thead>
           <tr>

@@ -20,7 +20,7 @@ import {
   useGetSettingsQuery,
   useRefreshMutation,
 } from '../redux/api';
-import {applyNotice, matchesText, toggle} from '../lib';
+import {applyNotice, matchesText, refreshNotice, toggle} from '../lib';
 import {isSeniorTitle} from '../seniority';
 import {MarksPanel} from './MarksPanel';
 import {PostingsList} from './PostingsList';
@@ -82,6 +82,7 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
     local: localOnly,
   });
   const [refresh, refreshState] = useRefreshMutation();
+  const refreshMessage = refreshNotice(refreshState.data, refreshState.error);
   const [addMark] = useAddMarkMutation();
   const [applyToPosting] = useApplyToPostingMutation();
   const [applyMessage, setApplyMessage] = useState<{text: string; error: boolean} | null>(null);
@@ -163,6 +164,11 @@ export function PostingsTab({onOpenSettings}: {onOpenSettings: () => void}) {
           {refreshing ? 'Refreshing…' : 'Refresh now'}
         </button>
       </div>
+      {refreshMessage && (
+        <p className="notice" role="status">
+          {refreshMessage}
+        </p>
+      )}
 
       <fieldset className="chips">
         <legend className="visually-hidden">Work type</legend>

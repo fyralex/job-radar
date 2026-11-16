@@ -14,6 +14,7 @@ import type {
   Posting,
   PostingsQuery,
   PostingsResponse,
+  RefreshResult,
   Preset,
   Profile,
   ProfileInput,
@@ -46,8 +47,10 @@ export const api = createApi({
       query: (query) => ({url: 'postings', params: postingsParams(query)}),
       providesTags: ['Postings'],
     }),
-    refresh: build.mutation<{started: boolean}, void>({
+    refresh: build.mutation<RefreshResult, void>({
       query: () => ({url: 'refresh', method: 'POST'}),
+      // Reload postings so `refreshing` (and its polling) shows up at once.
+      invalidatesTags: ['Postings'],
     }),
     recordVisit: build.mutation<{new_since: string | null}, void>({
       query: () => ({url: 'visits', method: 'POST'}),

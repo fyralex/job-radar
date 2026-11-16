@@ -270,7 +270,7 @@ user's settings, so changing a setting never needs a rescrape.
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/postings` | `profile`, `maxAgeDays`, `workType`, `employmentType`, `category` (repeatable), `local=true`. Leaves out marked postings and those with an application. Returns `{postings, failures, scraped_at, refreshing}` |
-| POST | `/api/refresh` | Starts a scrape in the background (202) |
+| POST | `/api/refresh` | Starts a scrape in the background: 202 `{started: true}`, or 200 `{started: false, reason}` with `already_running` or `unavailable` (lock can't be taken, e.g. Redis down) |
 | POST | `/api/visits` | Records a dashboard visit for the "New" badges |
 | GET | `/api/platforms` | Supported platforms, slug help and options |
 | GET / POST | `/api/boards` | List or follow boards |

@@ -163,5 +163,10 @@ def start_in_background(
         name="scrape",
         daemon=True,
     )
-    thread.start()
+    try:
+        thread.start()
+    except BaseException:
+        # No thread will ever release it; don't leave the lock held for hours.
+        locks.release(RUN_LOCK, token)
+        raise
     return True

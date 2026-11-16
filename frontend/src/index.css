@@ -117,3 +117,9 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .card-title { overflow-wrap: anywhere; }
 .posting-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .apply-button { font-size: 0.85rem; padding: 2px 8px; }
+
+.health { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.health-dots { display: inline-flex; gap: 3px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.dot-ok { background: var(--ok); }
+.dot-error { background: var(--danger); border-radius: 2px; } /* square, so not by colour alone */

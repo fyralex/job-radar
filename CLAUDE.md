@@ -179,7 +179,7 @@ frontend/src/
   datatypes.ts        mirrors the API's JSON (snake_case)
   lib.ts              pure helpers (sorting, text filter, form parsing)
   components/         PostingsTab, PostingsList, MarksPanel, ProfilesEditor,
-                      BoardsEditor, SearchSettingsForm, Badges,
+                      BoardsEditor, BoardHealth, SearchSettingsForm, Badges,
                       ApplicationsTab, ApplicationsList, ApplicationDetail,
                       AddApplicationForm
 ```
@@ -375,7 +375,7 @@ Milestone `v0.1`, one PR each:
 3. Redis (done: #3, #16): run and per-board locks, health, and a per-host
    rate limiter shared across processes. A per-board result cache (#19) was
    dropped: "Refresh now" resets the scrape timer, so it could never be used.
-4. `scrape_runs` history (#4) and a health column for boards (#27).
+4. Done: `scrape_runs` history (#4) and a health column for boards (#27).
 5. README with a screenshot, architecture diagram and quick start.
 
 Later: more platforms, one PR each and only after the owner approves the

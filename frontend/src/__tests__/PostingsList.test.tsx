@@ -161,6 +161,70 @@ describe('PostingsList actions menu', () => {
     expect(onApply).toHaveBeenCalledWith(p);
   });
 
+  it('moves focus to the next posting once an action takes one out of the list', () => {
+    const a = posting({title: 'First', posted_age_days: 1});
+    const b = posting({title: 'Second', posted_age_days: 2});
+    const onMark = vi.fn();
+    const {rerender} = render(<PostingsList postings={[a, b]} onMark={onMark} />);
+    fireEvent.click(screen.getByRole('button', {name: 'Actions for First'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Hide'}));
+    expect(onMark).toHaveBeenCalledWith(a, 'hidden');
+
+    // The posting is still listed until the server confirms: focus stays put.
+    rerender(<PostingsList postings={[a, b]} onMark={onMark} />);
+    expect(document.activeElement).not.toBe(screen.getByRole('button', {name: 'Actions for Second'}));
+
+    rerender(<PostingsList postings={[b]} onMark={onMark} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', {name: 'Actions for Second'}));
+  });
+
+  it('leaves focus alone if the user moved on after an action that failed', () => {
+    const a = posting({title: 'First', posted_age_days: 1});
+    const b = posting({title: 'Second', posted_age_days: 2});
+    const onMark = vi.fn();
+    const {rerender} = render(
+      <>
+        <input aria-label="search" />
+        <PostingsList postings={[a, b]} onMark={onMark} />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', {name: 'Actions for First'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Hide'}));
+    // The action failed: First is still listed, focus is back on its button.
+    expect(document.activeElement).toBe(screen.getByRole('button', {name: 'Actions for First'}));
+    // The user moves to the search box, and a filter later removes First.
+    const search = screen.getByLabelText('search');
+    search.focus();
+    rerender(
+      <>
+        <input aria-label="search" />
+        <PostingsList postings={[b]} onMark={onMark} />
+      </>,
+    );
+    expect(document.activeElement).toBe(search);
+  });
+
+  it('moves focus to the previous posting when the last one goes', () => {
+    const a = posting({title: 'First', posted_age_days: 1});
+    const b = posting({title: 'Second', posted_age_days: 2});
+    const onApply = vi.fn();
+    const {rerender} = render(<PostingsList postings={[a, b]} onApply={onApply} />);
+    fireEvent.click(screen.getByRole('button', {name: 'Actions for Second'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Mark as applied'}));
+    rerender(<PostingsList postings={[a]} onApply={onApply} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', {name: 'Actions for First'}));
+  });
+
+  it('focuses the empty-list message when the only posting goes', () => {
+    const a = posting({title: 'Only'});
+    const onMark = vi.fn();
+    const {rerender} = render(<PostingsList postings={[a]} onMark={onMark} />);
+    fireEvent.click(screen.getByRole('button', {name: 'Actions for Only'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Not interested'}));
+    rerender(<PostingsList postings={[]} onMark={onMark} />);
+    expect(document.activeElement).toBe(screen.getByText(/No postings match/));
+  });
+
   it('has no action column without handlers', () => {
     render(<PostingsList postings={[posting()]} />);
     expect(screen.queryByRole('button', {name: /^Actions for/})).toBeNull();

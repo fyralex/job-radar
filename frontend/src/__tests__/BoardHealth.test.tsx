@@ -43,7 +43,10 @@ describe('BoardHealth', () => {
     const dots = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(dots).toHaveLength(3);
     expect(dots.map((d) => d.className)).toEqual(['dot dot-ok', 'dot dot-ok', 'dot dot-error']);
-    expect(dots[2]?.getAttribute('aria-label')).toMatch(/failed \(HTTP 404\)/);
+    // Each dot carries its label as text (screen readers) and as a tooltip.
+    expect(dots[2]?.textContent).toMatch(/failed \(HTTP 404\)/);
+    expect(dots[2]?.querySelector('.visually-hidden')).not.toBeNull();
+    expect(dots[2]?.getAttribute('aria-label')).toBeNull();
     expect(dots[0]?.getAttribute('title')).toMatch(/10 postings/);
     expect(screen.getByText('failed').getAttribute('title')).toBe('HTTP 404');
   });
@@ -55,6 +58,15 @@ describe('BoardHealth', () => {
       />,
     );
     expect(screen.getByText('7 postings')).toBeTruthy();
+  });
+
+  it('uses the singular for one posting', () => {
+    render(
+      <BoardHealth
+        board={{recent_runs: [ok(1, 1)], last_status: 'ok', last_count: 1, last_error: null}}
+      />,
+    );
+    expect(screen.getByText('1 posting')).toBeTruthy();
   });
 
   it('says "not yet" before the first run, with no dots', () => {

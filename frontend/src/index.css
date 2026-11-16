@@ -54,6 +54,20 @@ button:disabled { opacity: 0.6; cursor: default; }
 .tab.active, .subtab.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .tabs, .subtabs { display: flex; gap: 8px; flex-wrap: wrap; }
 .subtabs { margin: 16px 0 8px; }
+/* Job profile tabs: underlined like real tabs, each with its posting count. */
+.subtabs { gap: 4px; border-bottom: 1px solid var(--border); flex-wrap: nowrap; overflow-x: auto; }
+.subtab {
+  border: none; border-bottom: 2px solid transparent; border-radius: 0;
+  margin-bottom: -1px; padding: 8px 12px; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.subtab:hover { color: var(--accent); }
+.subtab.active { border-bottom-color: var(--accent); }
+.tab-count {
+  font-size: 0.75rem; font-weight: 600; min-width: 1.6em; padding: 0 6px;
+  border-radius: 999px; background: var(--surface); color: var(--muted); text-align: center;
+}
+.subtab.active .tab-count { background: var(--accent); color: var(--accent-text); }
 .link-button { background: none; border: none; color: var(--accent); padding: 0 6px; }
 .link-button.danger, .error { color: var(--danger); }
 .ok { color: var(--ok); }
@@ -85,11 +99,39 @@ legend { font-weight: 600; padding: 0 4px; }
 .profile-form, .board-form, .settings-form { margin-top: 12px; }
 
 .table-scroll { overflow-x: auto; }
+/* Long lists scroll inside their own box so the filters above stay on screen;
+   column headers stick to the top of the box. */
+.scroll-area {
+  max-height: 70vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px;
+  overscroll-behavior: contain;
+}
+.scroll-area-short { max-height: 55vh; }
+.scroll-area:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scroll-area .cards { margin: 0; padding: 10px; }
+.scroll-area th {
+  position: sticky; top: 0; z-index: 1; background: var(--surface);
+  /* border-collapse drops a sticky cell's border; draw it as a shadow instead */
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+.scroll-area tr:last-child td { border-bottom: none; }
+@media (max-width: 640px) { .scroll-area { max-height: 65vh; } }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .sort-button { background: none; border: none; color: var(--text); font-weight: 600; padding: 0; }
 .nowrap { white-space: nowrap; }
-.mark-menu { font-size: 0.85rem; }
+.action-menu { position: relative; display: inline-block; }
+.action-button { font-size: 0.85rem; padding: 3px 10px; white-space: nowrap; }
+.action-panel {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 5;
+  display: grid; gap: 6px; padding: 8px; min-width: 11em;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+}
+.action-panel button { font-size: 0.85rem; padding: 4px 10px; text-align: left; white-space: nowrap; }
+/* Phone cards: keep the button at its natural size and open the panel
+   under it, not at the card's far edge. */
+.card .action-menu { justify-self: start; }
+.card .action-panel { left: 0; right: auto; }
 
 .badge { display: inline-block; font-size: 0.75rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
 .badge-onsite { background: var(--onsite); }
@@ -115,5 +157,38 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .timeline { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
 .timeline-note { color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .card-title { overflow-wrap: anywhere; }
-.posting-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.apply-button { font-size: 0.85rem; padding: 2px 8px; }
+
+.health { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.health-dots { display: inline-flex; gap: 3px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.dot-ok { background: var(--ok); }
+.dot-error { background: var(--danger); border-radius: 2px; } /* square, so not by colour alone */
+
+/* Postings filter bar: search, age and refresh on top; dropdown menus below. */
+.filter-bar { display: grid; gap: 8px; margin: 12px 0 8px; }
+.filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.filter-row .grow { min-width: 0; }
+.refresh-button { margin-left: auto; }
+.filter-menu { position: relative; }
+.filter-button { background: transparent; color: var(--text); border-color: var(--border); }
+.filter-button.active { border-color: var(--accent); color: var(--accent); }
+.filter-count { font-weight: 700; }
+.filter-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; margin: 0;
+  min-width: 180px; padding: 8px 12px; display: grid; gap: 6px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+  max-width: calc(100vw - 32px); /* never wider than the screen */
+}
+.filter-panel.align-right { left: auto; right: 0; }
+@media (max-width: 640px) {
+  .refresh-button { margin-left: 0; }
+  .filter-row input[type="search"] { flex-basis: 100%; }
+  /* The menu buttons can wrap onto new lines here, so a panel anchored to
+     its button could open off either edge. Anchor every panel to the row's
+     left edge instead: it always starts on screen and is never wider than
+     the row. */
+  .filter-row { position: relative; }
+  .filter-menu { position: static; }
+  .filter-panel, .filter-panel.align-right { left: 0; right: auto; max-width: 100%; }
+}

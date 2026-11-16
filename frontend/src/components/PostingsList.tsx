@@ -1,5 +1,6 @@
-import {useState} from 'react';
+import {useEffect, useId, useRef, useState} from 'react';
 import {MARK_LABELS, type MarkStatus, type Posting} from '../datatypes';
+import {useDisclosure} from '../hooks/useDisclosure';
 import {useMediaQuery} from '../hooks/useMediaQuery';
 import {type SortKey, postedLabel, sortPostings} from '../lib';
 import {EmploymentBadge, WorkTypeBadge} from './Badges';
@@ -14,42 +15,11 @@ const COLUMNS: {key: SortKey; label: string}[] = [
   {key: 'posted', label: 'Posted'},
 ];
 
-function MarkMenu({posting, onMark}: {posting: Posting; onMark: OnMark}) {
-  return (
-    <select
-      className="mark-menu"
-      value=""
-      aria-label={`Hide ${posting.title}`}
-      onChange={(e) => onMark(posting, e.target.value as MarkStatus)}
-    >
-      <option value="" disabled>
-        Hide…
-      </option>
-      {(Object.keys(MARK_LABELS) as MarkStatus[]).map((status) => (
-        <option key={status} value={status}>
-          {MARK_LABELS[status]}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function ApplyButton({posting, onApply}: {posting: Posting; onApply: OnApply}) {
-  return (
-    <button
-      type="button"
-      className="secondary apply-button"
-      aria-label={`Applied to ${posting.title}`}
-      title="Copy to Applications as Applied"
-      onClick={() => onApply(posting)}
-    >
-      Applied
-    </button>
-  );
-}
-
-// The "Applied" button and the hide menu, in one cell or card footer.
-function Actions({
+// One compact menu per posting: a button that opens a small panel of
+// buttons. Nothing happens until an option is pressed (a select would act on
+// a single arrow key in some browsers), so marking a job applied is always a
+// deliberate choice.
+function ActionMenu({
   posting,
   onMark,
   onApply,
@@ -58,10 +28,61 @@ function Actions({
   onMark?: OnMark;
   onApply?: OnApply;
 }) {
+  const {open, setOpen, root, button, onBlur} = useDisclosure();
+  const panelId = useId();
+  const panel = useRef<HTMLDivElement>(null);
+  // The list scrolls in its own box, which clips the panel on the last rows:
+  // scroll just enough to show it when it opens.
+  useEffect(() => {
+    if (open) panel.current?.scrollIntoView({block: 'nearest'});
+  }, [open]);
+  const choose = (act: () => void) => {
+    setOpen(false);
+    act();
+  };
   return (
-    <div className="posting-actions">
-      {onApply && <ApplyButton posting={posting} onApply={onApply} />}
-      {onMark && <MarkMenu posting={posting} onMark={onMark} />}
+    <div className="action-menu" ref={root} onBlur={onBlur}>
+      <button
+        ref={button}
+        type="button"
+        className="filter-button action-button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label={`Actions for ${posting.title}`}
+        onClick={() => setOpen(!open)}
+      >
+        Actions<span aria-hidden="true"> ▾</span>
+      </button>
+      {open && (
+        <div
+          id={panelId}
+          ref={panel}
+          className="action-panel"
+          role="group"
+          aria-label={`Actions for ${posting.title}`}
+        >
+          {onApply && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => choose(() => onApply(posting))}
+            >
+              Mark as applied
+            </button>
+          )}
+          {onMark &&
+            (Object.keys(MARK_LABELS) as MarkStatus[]).map((status) => (
+              <button
+                key={status}
+                type="button"
+                className="secondary"
+                onClick={() => choose(() => onMark(posting, status))}
+              >
+                {MARK_LABELS[status]}
+              </button>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -114,30 +135,32 @@ export function PostingsList({
             <option value="location:asc">Location A-Z</option>
           </select>
         </label>
-        <ul className="cards">
-          {sorted.map((p) => (
-            <li key={p.posting_key} className="card">
-              <a href={p.url} target="_blank" rel="noreferrer" className="card-title">
-                {p.is_new && <span className="new-badge">New</span>}
-                {p.title}
-              </a>
-              <div className="card-meta">
-                <span>{p.org}</span>
-                <span>
-                  <Location posting={p} />
-                </span>
-                <span>{postedLabel(p)}</span>
-              </div>
-              {hasActions && <Actions posting={p} onMark={onMark} onApply={onApply} />}
-            </li>
-          ))}
-        </ul>
+        <div className="scroll-area" role="region" aria-label="Postings" tabIndex={0}>
+          <ul className="cards">
+            {sorted.map((p) => (
+              <li key={p.posting_key} className="card">
+                <a href={p.url} target="_blank" rel="noreferrer" className="card-title">
+                  {p.is_new && <span className="new-badge">New</span>}
+                  {p.title}
+                </a>
+                <div className="card-meta">
+                  <span>{p.org}</span>
+                  <span>
+                    <Location posting={p} />
+                  </span>
+                  <span>{postedLabel(p)}</span>
+                </div>
+                {hasActions && <ActionMenu posting={p} onMark={onMark} onApply={onApply} />}
+              </li>
+            ))}
+          </ul>
+        </div>
       </>
     );
   }
 
   return (
-    <div className="table-scroll">
+    <div className="table-scroll scroll-area" role="region" aria-label="Postings" tabIndex={0}>
       <table className="postings">
         <thead>
           <tr>
@@ -175,7 +198,7 @@ export function PostingsList({
               <td className="nowrap">{postedLabel(p)}</td>
               {hasActions && (
                 <td>
-                  <Actions posting={p} onMark={onMark} onApply={onApply} />
+                  <ActionMenu posting={p} onMark={onMark} onApply={onApply} />
                 </td>
               )}
             </tr>

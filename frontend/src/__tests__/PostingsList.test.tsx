@@ -69,11 +69,12 @@ describe('PostingsList', () => {
     expect(orgs).toEqual(['Alpha', 'Beta']);
   });
 
-  it('calls onMark with the chosen status', () => {
+  it('hides a posting from its actions menu', () => {
     const onMark = vi.fn();
     const p = posting();
     render(<PostingsList postings={[p]} onMark={onMark} />);
-    fireEvent.change(screen.getByLabelText(`Hide ${p.title}`), {target: {value: 'not_interested'}});
+    fireEvent.click(screen.getByRole('button', {name: `Actions for ${p.title}`}));
+    fireEvent.click(screen.getByRole('button', {name: 'Not interested'}));
     expect(onMark).toHaveBeenCalledWith(p, 'not_interested');
   });
 });
@@ -87,32 +88,82 @@ function setScreen(narrow: boolean) {
   }));
 }
 
-describe('PostingsList Applied button', () => {
+describe('PostingsList actions menu', () => {
   afterEach(() => setScreen(false));
 
-  it('calls onApply with the posting from the table', () => {
+  it('opens a panel of buttons; nothing happens until one is pressed', () => {
     const onApply = vi.fn();
+    const onMark = vi.fn();
     const p = posting({title: 'Data Engineer'});
-    render(<PostingsList postings={[p]} onApply={onApply} onMark={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', {name: 'Applied to Data Engineer'}));
+    render(<PostingsList postings={[p]} onApply={onApply} onMark={onMark} />);
+    const toggle = screen.getByRole('button', {name: 'Actions for Data Engineer'});
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    // Keys on the closed button (an arrow press acted at once on the old select).
+    fireEvent.keyDown(toggle, {key: 'ArrowDown'});
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const panel = screen.getByRole('group', {name: 'Actions for Data Engineer'});
+    expect(within(panel).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Mark as applied',
+      'Hide',
+      'Not interested',
+    ]);
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onMark).not.toHaveBeenCalled();
+    // All three look the same; none is singled out (owner's choice).
+    expect(within(panel).getAllByRole('button').map((b) => b.className)).toEqual([
+      'secondary',
+      'secondary',
+      'secondary',
+    ]);
+
+    fireEvent.click(within(panel).getByRole('button', {name: 'Mark as applied'}));
     expect(onApply).toHaveBeenCalledWith(p);
-    // The hide menu is still there next to it.
-    expect(screen.getByLabelText('Hide Data Engineer')).toBeTruthy();
+    expect(onMark).not.toHaveBeenCalled();
+    expect(screen.queryByRole('group')).toBeNull(); // closes after a choice
   });
 
-  it('shows the button on phone-width cards too', () => {
+  it('scrolls the panel into view when it opens (the list box clips it on the last rows)', () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      render(<PostingsList postings={[posting({title: 'Last'})]} onApply={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', {name: 'Actions for Last'}));
+      expect(scrollIntoView).toHaveBeenCalledWith({block: 'nearest'});
+      expect(scrollIntoView.mock.contexts[0]).toBe(screen.getByRole('group'));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('closes on Escape without acting', () => {
+    const onApply = vi.fn();
+    const p = posting({title: 'Analyst'});
+    render(<PostingsList postings={[p]} onApply={onApply} />);
+    const toggle = screen.getByRole('button', {name: 'Actions for Analyst'});
+    fireEvent.click(toggle);
+    fireEvent.keyDown(document, {key: 'Escape'});
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(document.activeElement).toBe(toggle);
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it('is the same menu on phone-width cards', () => {
     setScreen(true);
     const onApply = vi.fn();
     const p = posting({title: 'Analyst'});
     render(<PostingsList postings={[p]} onApply={onApply} />);
     expect(screen.queryByRole('table')).toBeNull();
-    fireEvent.click(screen.getByRole('button', {name: 'Applied to Analyst'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Actions for Analyst'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Mark as applied'}));
     expect(onApply).toHaveBeenCalledWith(p);
   });
 
   it('has no action column without handlers', () => {
     render(<PostingsList postings={[posting()]} />);
-    expect(screen.queryByRole('button', {name: /^Applied to/})).toBeNull();
+    expect(screen.queryByRole('button', {name: /^Actions for/})).toBeNull();
     expect(screen.getAllByRole('columnheader')).toHaveLength(4);
   });
 });
@@ -139,5 +190,27 @@ describe('applyNotice', () => {
       error: true,
     });
     expect(applyNotice('Analyst', {status: 'FETCH_ERROR', error: 'offline'}).error).toBe(true);
+  });
+});
+
+describe('PostingsList scroll area', () => {
+  afterEach(() => setScreen(false));
+
+  it('puts the table in a focusable scroll region with its own headers', () => {
+    render(<PostingsList postings={[posting()]} />);
+    const region = screen.getByRole('region', {name: 'Postings'});
+    expect(region.className).toContain('scroll-area');
+    expect(region.getAttribute('tabindex')).toBe('0'); // keyboard users can scroll it
+    expect(within(region).getByRole('table')).toBeTruthy();
+    expect(within(region).getAllByRole('columnheader')).toHaveLength(4);
+  });
+
+  it('scrolls the phone cards the same way, with the sort menu outside', () => {
+    setScreen(true);
+    render(<PostingsList postings={[posting()]} />);
+    const region = screen.getByRole('region', {name: 'Postings'});
+    expect(within(region).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(region).queryByLabelText(/Sort by/)).toBeNull();
+    expect(screen.getByLabelText(/Sort by/)).toBeTruthy();
   });
 });

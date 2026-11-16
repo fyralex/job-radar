@@ -237,6 +237,27 @@ class TestPostings:
         assert [p["title"] for p in remote] == ["Backend Engineer"]
         assert api.get("/api/postings?maxAgeDays=60").json["postings"]
 
+    def test_each_posting_lists_the_profiles_it_matches(
+        self, api: FlaskClient, session: Session
+    ) -> None:
+        board = _board(api)
+        _seed_postings(
+            session,
+            board["id"],
+            [raw("Data Engineer", "Remote - US"), raw("Accountant", "Remote - US")],
+        )
+        eng = api.post("/api/profiles", json={"name": "Eng", "include_terms": ["engineer"]}).json
+        data = api.post("/api/profiles", json={"name": "Data", "include_terms": ["data"]}).json
+        off = api.post(
+            "/api/profiles", json={"name": "Off", "include_terms": ["engineer"], "enabled": False}
+        ).json
+        by_title = {p["title"]: p["profile_ids"] for p in api.get("/api/postings").json["postings"]}
+        assert by_title == {"Data Engineer": [eng["id"], data["id"]], "Accountant": []}
+        assert off["id"] not in by_title["Data Engineer"]  # disabled profiles aren't listed
+        # Still there when the list is narrowed to one profile.
+        one = api.get(f"/api/postings?profile={eng['id']}").json["postings"]
+        assert [p["profile_ids"] for p in one] == [[eng["id"], data["id"]]]
+
     def test_marks_hide_postings(self, api: FlaskClient, session: Session) -> None:
         board = _board(api)
         _seed_postings(session, board["id"], [raw("Engineer", "Remote - US")])

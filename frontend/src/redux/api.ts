@@ -80,9 +80,11 @@ export const api = createApi({
       providesTags: ['Profiles'],
     }),
     getPresets: build.query<Preset[], void>({query: () => 'profiles/presets'}),
+    // Postings carry each profile's id (`profile_ids`), so any profile change
+    // must refetch them, or a new profile's tab would show nothing.
     createProfile: build.mutation<Profile, ProfileInput>({
       query: (body) => ({url: 'profiles', method: 'POST', body}),
-      invalidatesTags: ['Profiles'],
+      invalidatesTags: ['Profiles', 'Postings'],
     }),
     updateProfile: build.mutation<Profile, {id: number} & Partial<ProfileInput>>({
       query: ({id, ...body}) => ({url: `profiles/${id}`, method: 'PATCH', body}),
@@ -90,7 +92,7 @@ export const api = createApi({
     }),
     deleteProfile: build.mutation<void, number>({
       query: (id) => ({url: `profiles/${id}`, method: 'DELETE'}),
-      invalidatesTags: ['Profiles'],
+      invalidatesTags: ['Profiles', 'Postings'],
     }),
 
     getSettings: build.query<Settings, void>({

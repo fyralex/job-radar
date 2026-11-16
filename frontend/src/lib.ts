@@ -1,4 +1,10 @@
-import type {Posting, RefreshResult} from './datatypes';
+import type {
+  EmploymentType,
+  Posting,
+  RefreshResult,
+  ScrapeRun,
+  WorkType,
+} from './datatypes';
 import {errorText} from './errors';
 
 // Pure helpers shared by components and tests.
@@ -102,4 +108,60 @@ export function refreshNotice(
     return 'A refresh is already running; new postings appear when it finishes.';
   }
   return 'Refreshing is unavailable right now (the lock service is down). Try again later.';
+}
+
+// One scrape run for a tooltip and screen readers, e.g.
+// "Nov 15, 2026, 9:30 AM: 12 postings" or "...: failed (HTTP 404)".
+export function runLabel(run: ScrapeRun): string {
+  const when = new Date(run.started_at).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+  if (run.status === 'error') return `${when}: failed (${run.error ?? 'unknown error'})`;
+  const count = run.count ?? 0;
+  return `${when}: ${count} ${count === 1 ? 'posting' : 'postings'}`;
+}
+
+// Everything the Postings filter bar sets. `maxAge` undefined means "use the
+// saved setting".
+export interface PostingFilters {
+  text: string;
+  maxAge: number | undefined;
+  workTypes: WorkType[];
+  employment: EmploymentType[];
+  localOnly: boolean;
+  hideSenior: boolean;
+  newOnly: boolean;
+}
+
+export const DEFAULT_FILTERS: PostingFilters = {
+  text: '',
+  maxAge: undefined,
+  workTypes: [],
+  employment: [],
+  localOnly: false,
+  hideSenior: false,
+  newOnly: false,
+};
+
+// Filters set for this visit. `hideSenior` is a remembered preference, not
+// counted here, so "Clear filters" doesn't show on every load because of it.
+export function hasActiveFilters(f: PostingFilters): boolean {
+  return (
+    f.text !== '' ||
+    f.maxAge !== undefined ||
+    f.workTypes.length > 0 ||
+    f.employment.length > 0 ||
+    f.localOnly ||
+    f.newOnly
+  );
+}
+
+// How many postings each job profile tab would show, plus "all".
+export function countByProfile(postings: Posting[], profileIds: number[]): Record<string, number> {
+  const counts: Record<string, number> = {all: postings.length};
+  for (const id of profileIds) {
+    counts[String(id)] = postings.filter((p) => p.profile_ids.includes(id)).length;
+  }
+  return counts;
 }

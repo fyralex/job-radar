@@ -155,6 +155,8 @@ describe('FilterMenu', () => {
     const box = screen.getByLabelText('A');
     fireEvent.blur(button, {relatedTarget: box}); // Tab into the panel
     expect(screen.getByRole('group')).toBeTruthy();
+    fireEvent.blur(box, {relatedTarget: null}); // a click on empty panel space, or a window switch
+    expect(screen.getByRole('group')).toBeTruthy();
     fireEvent.blur(box, {relatedTarget: screen.getByRole('button', {name: 'elsewhere'})});
     expect(screen.queryByRole('group')).toBeNull();
   });

@@ -54,8 +54,10 @@ export function FilterMenu({
       className="filter-menu"
       ref={root}
       onBlur={(e) => {
-        // Tabbing out of the menu (not between its own controls) closes it.
-        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+        // Tabbing out of the menu closes it. A blur with no new focus target
+        // (a click on an empty spot in the panel, or switching windows) is
+        // left alone: clicks outside are handled by the mousedown listener.
+        if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setOpen(false);
       }}
     >
       <button

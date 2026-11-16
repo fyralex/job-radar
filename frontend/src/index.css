@@ -160,4 +160,11 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 @media (max-width: 640px) {
   .refresh-button { margin-left: 0; }
   .filter-row input[type="search"] { flex-basis: 100%; }
+  /* The menu buttons can wrap onto new lines here, so a panel anchored to
+     its button could open off either edge. Anchor every panel to the row's
+     left edge instead: it always starts on screen and is never wider than
+     the row. */
+  .filter-row { position: relative; }
+  .filter-menu { position: static; }
+  .filter-panel, .filter-panel.align-right { left: 0; right: auto; max-width: 100%; }
 }

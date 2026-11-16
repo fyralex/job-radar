@@ -115,7 +115,9 @@ def _run_holding_lock(
                 if row is None:  # deleted while the run was in progress
                     continue
                 row.last_scraped_at = now
-                started = now - timedelta(seconds=result.seconds)
+                # The board's own fetch times (not the end of the whole run).
+                started = result.started_at or now
+                finished = result.finished_at or now
                 if result.ok:
                     count = upsert_board_postings(session, row.id, result.postings, now)
                     row.last_status, row.last_error, row.last_count = "ok", None, count
@@ -124,7 +126,7 @@ def _run_holding_lock(
                         session,
                         row.id,
                         started_at=started,
-                        finished_at=now,
+                        finished_at=finished,
                         count=count,
                         error=None,
                     )
@@ -136,7 +138,7 @@ def _run_holding_lock(
                         session,
                         row.id,
                         started_at=started,
-                        finished_at=now,
+                        finished_at=finished,
                         count=None,
                         error=error,
                     )

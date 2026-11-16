@@ -17,6 +17,7 @@ import time
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from job_radar.coordination import BOARD_LOCK_TTL_SECONDS, Locks, board_lock, holding
 from job_radar.http import HttpClient
@@ -35,18 +36,28 @@ class BoardResult:
     error: str | None
     seconds: float
     skipped: bool = False  # another process holds this board's lock
+    started_at: datetime | None = None  # wall-clock start of this board's fetch
 
     @property
     def ok(self) -> bool:
         return self.error is None and not self.skipped
 
+    @property
+    def finished_at(self) -> datetime | None:
+        return (
+            None if self.started_at is None else self.started_at + timedelta(seconds=self.seconds)
+        )
+
 
 def fetch_one(board: Board, client_factory: ClientFactory) -> BoardResult:
+    started_at = datetime.now(UTC)
     started = time.monotonic()
     client = client_factory()
     try:
         postings = get_platform(board.platform).fetch_board(client, board)
-        return BoardResult(board, tuple(postings), None, time.monotonic() - started)
+        return BoardResult(
+            board, tuple(postings), None, time.monotonic() - started, started_at=started_at
+        )
     except BoardFetchError as exc:
         error = str(exc)
     except Exception as exc:  # a parser bug must not take down the whole run
@@ -54,7 +65,7 @@ def fetch_one(board: Board, client_factory: ClientFactory) -> BoardResult:
         error = f"unexpected error: {type(exc).__name__}: {exc}"
     finally:
         client.close()
-    return BoardResult(board, (), error, time.monotonic() - started)
+    return BoardResult(board, (), error, time.monotonic() - started, started_at=started_at)
 
 
 def _fetch_locked(board: Board, client_factory: ClientFactory, locks: Locks) -> BoardResult:

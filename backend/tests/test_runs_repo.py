@@ -88,6 +88,7 @@ def test_a_scrape_records_one_run_per_fetched_board(
     locks = LocalLocks()
     assert locks.acquire(board_lock(str(busy.id)), 60) is not None  # being scraped elsewhere
 
+    before = utcnow()
     summary = run_scrape(sessions, None, client_factory=_client, locks=locks)
 
     assert summary is not None
@@ -95,7 +96,8 @@ def test_a_scrape_records_one_run_per_fetched_board(
     assert set(runs) == {good.id, gone.id}  # the skipped board gets no row
     [ok] = runs[good.id]
     assert (ok.status, ok.count, ok.error) == ("ok", 4, None)
-    assert ok.finished_at == summary.finished_at and ok.started_at <= ok.finished_at
+    # The board's own fetch times: inside the run, not stamped with its end.
+    assert before <= ok.started_at <= ok.finished_at <= summary.finished_at
     [failed] = runs[gone.id]
     assert failed.status == "error" and failed.count is None and "404" in (failed.error or "")
 

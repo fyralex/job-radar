@@ -46,6 +46,8 @@ def prune_runs(session: Session, now: datetime, keep_days: int = KEEP_DAYS) -> i
     result = session.execute(
         delete(ScrapeRunRow).where(ScrapeRunRow.started_at < now - timedelta(days=keep_days))
     )
+    # A DELETE returns a CursorResult, which has rowcount; execute() is typed
+    # as returning the base Result, which doesn't.
     return int(result.rowcount or 0)  # type: ignore[attr-defined]
 
 

@@ -362,9 +362,20 @@ a milestone is closed, when a `v*` tag is pushed (one per milestone, e.g.
 A red milestone run gets an issue, and the release waits for it. GitHub only
 offers a manual run for workflows on the default branch, so a change to
 `ci.yml` is first run by hand right after it merges:
-`gh workflow run ci.yml --ref main`. `main` needs
-a PR and a linear history; there are no required status checks, since CI
-doesn't run per PR.
+`gh workflow run ci.yml --ref main`.
+
+### Repository protections (public repo, set 2026-11-16)
+
+- A ruleset ("Protect main") on the default branch: changes only through a
+  PR, no force-push, no deletion, linear history. No required approvals (the
+  owner merges their own PRs) and no required status checks, since CI doesn't
+  run per PR.
+- Merges are **squash or rebase only** (merge commits are off), and merged
+  branches are deleted. A PR branch may contain merge commits from updating
+  it with `main`; squash or rebase flattens them.
+- Secret scanning with push protection, Dependabot alerts and security
+  updates, and private vulnerability reporting (see `SECURITY.md`) are on.
+  Workflow runs from outside contributors need approval.
 
 ## Roadmap
 

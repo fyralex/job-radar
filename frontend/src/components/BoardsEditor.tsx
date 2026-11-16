@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import type {BoardInput, BoardOptions, BoardValidation, Platform} from '../datatypes';
 import {errorText} from '../errors';
+import {BoardHealth} from './BoardHealth';
 import {useActionError} from '../hooks/useActionError';
 import {
   useCreateBoardMutation,
@@ -177,7 +178,7 @@ export function BoardsEditor() {
               <th>On</th>
               <th>Organization</th>
               <th>Platform</th>
-              <th>Last refresh</th>
+              <th>Health</th>
               <th>
                 <span className="visually-hidden">Actions</span>
               </th>
@@ -202,15 +203,7 @@ export function BoardsEditor() {
                 </td>
                 <td>{b.platform_name}</td>
                 <td>
-                  {b.last_status === 'error' ? (
-                    <span className="error" title={b.last_error ?? ''}>
-                      failed
-                    </span>
-                  ) : b.last_status === 'ok' ? (
-                    `${b.last_count ?? 0} postings`
-                  ) : (
-                    <span className="muted">not yet</span>
-                  )}
+                  <BoardHealth board={b} />
                 </td>
                 <td>
                   <button

@@ -1,4 +1,4 @@
-import type {Posting, RefreshResult} from './datatypes';
+import type {Posting, RefreshResult, ScrapeRun} from './datatypes';
 import {errorText} from './errors';
 
 // Pure helpers shared by components and tests.
@@ -102,4 +102,16 @@ export function refreshNotice(
     return 'A refresh is already running; new postings appear when it finishes.';
   }
   return 'Refreshing is unavailable right now (the lock service is down). Try again later.';
+}
+
+// One scrape run for a tooltip and screen readers, e.g.
+// "Nov 15, 2026, 9:30 AM: 12 postings" or "...: failed (HTTP 404)".
+export function runLabel(run: ScrapeRun): string {
+  const when = new Date(run.started_at).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+  if (run.status === 'error') return `${when}: failed (${run.error ?? 'unknown error'})`;
+  const count = run.count ?? 0;
+  return `${when}: ${count} ${count === 1 ? 'posting' : 'postings'}`;
 }

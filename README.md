@@ -113,7 +113,7 @@ leaves your current data exactly as it was:
 ```bash
 f=~/job-radar-backups/job-radar-YYYY-MM-DD-HHMM.sql   # the backup to restore
 docker compose stop backend worker
-if tail -n 5 "$f" 2>/dev/null | grep -q 'PostgreSQL database dump complete'; then
+if tail -n 20 "$f" 2>/dev/null | grep -q 'PostgreSQL database dump complete'; then
   { echo 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'; cat "$f"; } |
     docker compose exec -T postgres sh -c 'psql -q -1 -v ON_ERROR_STOP=1 -o /dev/null -f - -U "$POSTGRES_USER" "$POSTGRES_DB"' \
     && echo "Restored." || echo "Restore failed: nothing was changed."
@@ -135,7 +135,10 @@ docker compose up -d --build    # database changes apply when the backend starts
 
 **Roll back** an update that went wrong: restore the backup you took before
 it (the steps above, but leave out the last line, so the backend and worker
-stay stopped), then go back to the version you were on and start it:
+stay stopped). Go on only if it printed "Restored."; otherwise your data is
+untouched, so start the current version again with
+`docker compose start backend worker`. Then go back to the version you were on
+and start it:
 
 ```bash
 git checkout v0.1.0             # the release or commit you were on before

@@ -128,7 +128,9 @@ class RobotsCache:
             return _Robots(None, True, now)
         if 400 <= response.status_code < 500:
             return _Robots(None, False, now)
-        if response.status_code >= 500:
+        if not 200 <= response.status_code < 300:
+            # 5xx, or a 3xx we can't follow (no Location, 300, 304): treat the
+            # file as unreachable and stay off the host until the next check.
             return _Robots(None, True, now)
         parser = urllib.robotparser.RobotFileParser()
         parser.parse(response.text.splitlines())
@@ -285,6 +287,10 @@ class HttpClient:
         for _hop in range(MAX_REDIRECTS + 1):
             response = self._get_once(url, params, headers, timeout)
             if not response.is_redirect:
+                if response.status_code >= 300:  # a 3xx we can't follow
+                    raise BoardFetchError(
+                        f"{urlsplit(url).netloc}: HTTP {response.status_code} for {response.url}"
+                    )
                 return response
             # The target is a new request: robots check and slot on its own host.
             url = urljoin(response.url, response.headers["Location"])

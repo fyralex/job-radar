@@ -385,3 +385,51 @@ def test_robots_txt_redirecting_too_often_keeps_us_off_the_host() -> None:
     assert job_call.call_count == 0
     robots_calls = [c for c in responses.calls if c.request.url == ROBOTS]
     assert len(robots_calls) == 6
+
+
+@responses.activate
+@pytest.mark.parametrize("status", [300, 304, 302])
+def test_a_3xx_that_cannot_be_followed_fails_the_request(status: int) -> None:
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=status)  # no Location header
+    with pytest.raises(BoardFetchError, match=f"HTTP {status}"):
+        _logging_client([]).get(URL)
+
+
+@responses.activate
+def test_robots_txt_3xx_without_location_keeps_us_off_the_host() -> None:
+    responses.get(ROBOTS, status=302, body="User-agent: *\nAllow: /\n")  # no Location
+    job_call = responses.get(URL, json={})
+    with pytest.raises(BoardFetchError, match=r"robots\.txt disallows"):
+        _logging_client([]).get(URL)
+    assert job_call.call_count == 0
+
+
+@responses.activate
+def test_retry_then_redirect() -> None:
+    events: list[str] = []
+    moved = "https://api.example.com/v2/jobs"
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=503)
+    responses.get(URL, status=301, headers={"Location": moved})
+    responses.get(moved, json={"ok": True})
+    assert _logging_client(events).get_json(URL) == {"ok": True}
+    # robots.txt, the 503, its retry (the 301), and the target: four slots.
+    assert events == ["wait api.example.com"] * 4
+
+
+@responses.activate
+def test_cross_host_redirect_that_robots_txt_allows() -> None:
+    events: list[str] = []
+    target = "https://cdn.example.org/jobs.json"
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=302, headers={"Location": target})
+    responses.get("https://cdn.example.org/robots.txt", body="User-agent: *\nDisallow: /private\n")
+    responses.get(target, json={"ok": True})
+    assert _logging_client(events).get_json(URL) == {"ok": True}
+    assert events == [
+        "wait api.example.com",
+        "wait api.example.com",
+        "wait cdn.example.org",
+        "wait cdn.example.org",
+    ]

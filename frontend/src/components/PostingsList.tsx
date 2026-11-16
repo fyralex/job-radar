@@ -36,8 +36,11 @@ function ActionMenu({
   useEffect(() => {
     if (open) panel.current?.scrollIntoView({block: 'nearest'});
   }, [open]);
+  // Focus goes back to the Actions button while the action runs, so it stays
+  // in the list (PostingsList moves it on once the posting has gone).
   const choose = (act: () => void) => {
     setOpen(false);
+    button.current?.focus();
     act();
   };
   return (
@@ -112,13 +115,19 @@ export function PostingsList({
   // After an action takes a posting out of the list, its Actions button is
   // gone and focus would fall to <body>. Remember where it was, and once the
   // posting has left the list, move focus to the Actions button now in that
-  // place (the next posting), or to the list itself if none is left.
+  // place: the next posting, the previous one if it was last, or the
+  // "No postings match" message if none is left. Only if focus is still in
+  // the list or lost to <body>: if the user has moved on (e.g. typing in the
+  // search box after an action that failed), forget it and leave focus alone.
   const root = useRef<HTMLElement | null>(null);
   const pending = useRef<{key: string; index: number} | null>(null);
   useEffect(() => {
     const acted = pending.current;
     if (!acted || postings.some((p) => p.posting_key === acted.key)) return;
     pending.current = null;
+    const active = document.activeElement;
+    const inList = active !== null && root.current !== null && root.current.contains(active);
+    if (active !== null && active !== document.body && !inList) return;
     const buttons = root.current?.querySelectorAll<HTMLButtonElement>('.action-button') ?? [];
     const next = buttons[Math.min(acted.index, buttons.length - 1)];
     (next ?? root.current)?.focus();

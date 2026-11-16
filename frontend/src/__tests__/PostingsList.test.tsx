@@ -178,6 +178,32 @@ describe('PostingsList actions menu', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', {name: 'Actions for Second'}));
   });
 
+  it('leaves focus alone if the user moved on after an action that failed', () => {
+    const a = posting({title: 'First', posted_age_days: 1});
+    const b = posting({title: 'Second', posted_age_days: 2});
+    const onMark = vi.fn();
+    const {rerender} = render(
+      <>
+        <input aria-label="search" />
+        <PostingsList postings={[a, b]} onMark={onMark} />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', {name: 'Actions for First'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Hide'}));
+    // The action failed: First is still listed, focus is back on its button.
+    expect(document.activeElement).toBe(screen.getByRole('button', {name: 'Actions for First'}));
+    // The user moves to the search box, and a filter later removes First.
+    const search = screen.getByLabelText('search');
+    search.focus();
+    rerender(
+      <>
+        <input aria-label="search" />
+        <PostingsList postings={[b]} onMark={onMark} />
+      </>,
+    );
+    expect(document.activeElement).toBe(search);
+  });
+
   it('moves focus to the previous posting when the last one goes', () => {
     const a = posting({title: 'First', posted_age_days: 1});
     const b = posting({title: 'Second', posted_age_days: 2});

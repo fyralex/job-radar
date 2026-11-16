@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {matchesText, parseTerms, splitList, toggle} from '../lib';
+import {matchesText, parseTerms, refreshNotice, splitList, toggle} from '../lib';
 import {postingsParams} from '../redux/api';
 import {posting} from './factories';
 
@@ -38,5 +38,27 @@ describe('toggle', () => {
   it('adds or removes a value', () => {
     expect(toggle(['a'], 'b')).toEqual(['a', 'b']);
     expect(toggle(['a', 'b'], 'a')).toEqual(['b']);
+  });
+});
+
+describe('refreshNotice', () => {
+  it('says nothing when a run started', () => {
+    expect(refreshNotice({started: true, refreshing: true, reason: null}, undefined)).toBeNull();
+    expect(refreshNotice(undefined, undefined)).toBeNull();
+  });
+
+  it('explains why a run did not start', () => {
+    expect(
+      refreshNotice({started: false, refreshing: true, reason: 'already_running'}, undefined),
+    ).toMatch(/already running/);
+    expect(
+      refreshNotice({started: false, refreshing: false, reason: 'unavailable'}, undefined),
+    ).toMatch(/unavailable right now/);
+  });
+
+  it('shows a request error', () => {
+    expect(refreshNotice(undefined, {status: 500, data: {error: 'boom'}})).toBe(
+      'Couldn’t start a refresh: boom',
+    );
   });
 });

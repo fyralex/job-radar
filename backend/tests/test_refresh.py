@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
@@ -142,6 +143,19 @@ def test_start_in_background_takes_the_lock_first(sessions: sessionmaker[Session
     deadline = time.monotonic() + 5
     while is_running(locks) and time.monotonic() < deadline:
         time.sleep(0.01)
+    assert not is_running(locks)
+
+
+def test_start_in_background_releases_the_lock_if_the_thread_cannot_start(
+    sessions: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail(_self: threading.Thread) -> None:
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", fail)
+    locks = LocalLocks()
+    with pytest.raises(RuntimeError):
+        start_in_background(sessions, None, locks=locks)
     assert not is_running(locks)
 
 

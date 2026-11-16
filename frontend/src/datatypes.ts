@@ -57,6 +57,13 @@ export interface PostingsResponse {
   refreshing: boolean;
 }
 
+// POST /api/refresh.
+export interface RefreshResult {
+  started: boolean;
+  refreshing: boolean;
+  reason: 'already_running' | 'unavailable' | null;
+}
+
 export interface PostingsQuery {
   profile?: number;
   maxAgeDays?: number;

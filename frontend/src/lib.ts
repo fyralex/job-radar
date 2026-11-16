@@ -1,4 +1,4 @@
-import type {Posting} from './datatypes';
+import type {Posting, RefreshResult} from './datatypes';
 import {errorText} from './errors';
 
 // Pure helpers shared by components and tests.
@@ -88,4 +88,18 @@ export function applyNotice(
     return {text: `“${title}” is already in Applications.`, error: false};
   }
   return {text: `Couldn’t add “${title}”: ${errorText(error)}`, error: true};
+}
+
+// What to tell the user after "Refresh now"; null when a run started (the
+// button itself then shows "Refreshing…").
+export function refreshNotice(
+  result: RefreshResult | undefined,
+  error: Parameters<typeof errorText>[0],
+): string | null {
+  if (error) return `Couldn’t start a refresh: ${errorText(error)}`;
+  if (!result || result.started) return null;
+  if (result.reason === 'already_running') {
+    return 'A refresh is already running; new postings appear when it finishes.';
+  }
+  return 'Refreshing is unavailable right now (the lock service is down). Try again later.';
 }

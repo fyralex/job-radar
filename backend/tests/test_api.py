@@ -9,6 +9,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from job_radar.app import create_app
+from job_radar.blueprints import postings as postings_blueprint
 from job_radar.config import Config
 from job_radar.coordination import RUN_LOCK, RedisLocks
 from job_radar.models import BoardRow, utcnow
@@ -76,7 +77,9 @@ def test_refresh_with_redis_down_does_not_claim_to_start(
     engine: Engine, sessions: sessionmaker[Session]
 ) -> None:
     api = _app_with_redis(engine, sessions, "redis://127.0.0.1:1/0")
-    assert api.post("/api/refresh").json["started"] is False
+    response = api.post("/api/refresh")
+    assert response.status_code == 200
+    assert response.json == {"started": False, "refreshing": False, "reason": "unavailable"}
 
 
 @pytest.mark.redis
@@ -90,7 +93,9 @@ def test_refreshing_follows_the_shared_run_lock(
     token = worker.acquire(RUN_LOCK, 60)
     assert token is not None
     assert api.get("/api/postings").json["refreshing"] is True
-    assert api.post("/api/refresh").json["started"] is False
+    response = api.post("/api/refresh")
+    assert response.status_code == 200
+    assert response.json == {"started": False, "refreshing": True, "reason": "already_running"}
     worker.release(RUN_LOCK, token)
     assert api.get("/api/postings").json["refreshing"] is False
 
@@ -265,3 +270,11 @@ class TestPostings:
         assert api.get("/api/postings?workType=office").status_code == 400
         assert api.get("/api/postings?maxAgeDays=abc").status_code == 400
         assert api.get("/api/postings?profile=999").status_code == 404
+
+
+def test_refresh_started(api: FlaskClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Don't run a real scrape on the test transaction's connection.
+    monkeypatch.setattr(postings_blueprint, "start_in_background", lambda *_a, **_k: True)
+    response = api.post("/api/refresh")
+    assert response.status_code == 202
+    assert response.json == {"started": True, "refreshing": True, "reason": None}

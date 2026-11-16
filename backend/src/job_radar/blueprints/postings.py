@@ -97,6 +97,10 @@ def get_postings() -> Any:
 
 @bp.post("/refresh")
 def refresh() -> Any:
+    """Start a scrape in the background: 202 with `started: true`. Otherwise
+    200 with `started: false` and a `reason`: "already_running" (another run
+    holds the lock) or "unavailable" (the lock can't be taken, e.g. Redis is
+    down)."""
     app_state = state()
     started = start_in_background(
         app_state.sessions,
@@ -104,7 +108,11 @@ def refresh() -> Any:
         app_state.config.scrape_workers,
         locks=app_state.locks,
     )
-    return jsonify(started=started, refreshing=True), 202
+    if started:
+        return jsonify(started=True, refreshing=True, reason=None), 202
+    running = is_running(app_state.locks)
+    reason = "already_running" if running else "unavailable"
+    return jsonify(started=False, refreshing=running, reason=reason), 200
 
 
 @bp.post("/visits")

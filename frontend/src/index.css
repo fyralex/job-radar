@@ -139,3 +139,23 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .dot-ok { background: var(--ok); }
 .dot-error { background: var(--danger); border-radius: 2px; } /* square, so not by colour alone */
+
+/* Postings filter bar: search, age and refresh on top; dropdown menus below. */
+.filter-bar { display: grid; gap: 8px; margin: 12px 0 8px; }
+.filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.filter-row .grow { min-width: 0; }
+.refresh-button { margin-left: auto; }
+.filter-menu { position: relative; }
+.filter-button { background: transparent; color: var(--text); border-color: var(--border); }
+.filter-button.active { border-color: var(--accent); color: var(--accent); }
+.filter-count { font-weight: 700; }
+.filter-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; margin: 0;
+  min-width: 180px; padding: 8px 12px; display: grid; gap: 6px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+}
+@media (max-width: 640px) {
+  .refresh-button { margin-left: 0; }
+  .filter-row input[type="search"] { flex-basis: 100%; }
+}

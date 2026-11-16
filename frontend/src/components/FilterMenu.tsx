@@ -12,7 +12,8 @@ export interface FilterOption {
 // menu closes it; Escape returns focus to the button. The checkboxes are
 // ordinary inputs, so Tab and Space work inside the panel. `align="right"`
 // opens the panel leftwards from the button's right edge (for the last menu
-// in a row, so it stays on screen at phone width).
+// in a row). It only applies above 640px: on phones every panel is anchored
+// to the filter row's left edge instead (see index.css).
 export function FilterMenu({
   label,
   options,

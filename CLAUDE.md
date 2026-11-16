@@ -178,7 +178,7 @@ frontend/src/
   redux/api.ts        RTK Query endpoints
   datatypes.ts        mirrors the API's JSON (snake_case)
   lib.ts              pure helpers (sorting, text filter, form parsing)
-  components/         PostingsTab, FilterBar, FilterMenu, PostingsList, MarksPanel, ProfilesEditor,
+  components/         PostingsTab, ProfileTabs, FilterBar, FilterMenu, PostingsList, MarksPanel, ProfilesEditor,
                       BoardsEditor, BoardHealth, SearchSettingsForm, Badges,
                       ApplicationsTab, ApplicationsList, ApplicationDetail,
                       AddApplicationForm
@@ -273,7 +273,7 @@ user's settings, so changing a setting never needs a rescrape.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/postings` | `profile`, `maxAgeDays`, `workType`, `employmentType`, `category` (repeatable), `local=true`. Leaves out marked postings and those with an application. Returns `{postings, failures, scraped_at, refreshing}` |
+| GET | `/api/postings` | `profile`, `maxAgeDays`, `workType`, `employmentType`, `category` (repeatable), `local=true`. Leaves out marked postings and those with an application. Each posting lists `profile_ids`, the enabled profiles it matches; the UI fetches without `profile` and switches and counts profile tabs from that. Returns `{postings, failures, scraped_at, refreshing}` |
 | POST | `/api/refresh` | Starts a scrape in the background: 202 `{started: true}`, or 200 `{started: false, reason}` with `already_running` or `unavailable` (lock can't be taken, e.g. Redis down) |
 | POST | `/api/visits` | Records a dashboard visit for the "New" badges |
 | GET | `/api/platforms` | Supported platforms, slug help and options |

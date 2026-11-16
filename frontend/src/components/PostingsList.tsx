@@ -14,42 +14,11 @@ const COLUMNS: {key: SortKey; label: string}[] = [
   {key: 'posted', label: 'Posted'},
 ];
 
-function MarkMenu({posting, onMark}: {posting: Posting; onMark: OnMark}) {
-  return (
-    <select
-      className="mark-menu"
-      value=""
-      aria-label={`Hide ${posting.title}`}
-      onChange={(e) => onMark(posting, e.target.value as MarkStatus)}
-    >
-      <option value="" disabled>
-        Hide…
-      </option>
-      {(Object.keys(MARK_LABELS) as MarkStatus[]).map((status) => (
-        <option key={status} value={status}>
-          {MARK_LABELS[status]}
-        </option>
-      ))}
-    </select>
-  );
-}
+type Action = 'applied' | MarkStatus;
 
-function ApplyButton({posting, onApply}: {posting: Posting; onApply: OnApply}) {
-  return (
-    <button
-      type="button"
-      className="secondary apply-button"
-      aria-label={`Applied to ${posting.title}`}
-      title="Copy to Applications as Applied"
-      onClick={() => onApply(posting)}
-    >
-      Applied
-    </button>
-  );
-}
-
-// The "Applied" button and the hide menu, in one cell or card footer.
-function Actions({
+// One compact menu per posting: mark it Applied (copies it into
+// Applications) or hide it. It resets to "Actions" after each choice.
+function ActionMenu({
   posting,
   onMark,
   onApply,
@@ -58,11 +27,29 @@ function Actions({
   onMark?: OnMark;
   onApply?: OnApply;
 }) {
+  const choose = (action: Action) => {
+    if (action === 'applied') onApply?.(posting);
+    else onMark?.(posting, action);
+  };
   return (
-    <div className="posting-actions">
-      {onApply && <ApplyButton posting={posting} onApply={onApply} />}
-      {onMark && <MarkMenu posting={posting} onMark={onMark} />}
-    </div>
+    <select
+      className="action-menu"
+      value=""
+      aria-label={`Actions for ${posting.title}`}
+      // Options come from the fixed list below, so the cast holds.
+      onChange={(e) => choose(e.target.value as Action)}
+    >
+      <option value="" disabled>
+        Actions…
+      </option>
+      {onApply && <option value="applied">Mark as applied</option>}
+      {onMark &&
+        (Object.keys(MARK_LABELS) as MarkStatus[]).map((status) => (
+          <option key={status} value={status}>
+            {MARK_LABELS[status]}
+          </option>
+        ))}
+    </select>
   );
 }
 
@@ -129,7 +116,7 @@ export function PostingsList({
                   </span>
                   <span>{postedLabel(p)}</span>
                 </div>
-                {hasActions && <Actions posting={p} onMark={onMark} onApply={onApply} />}
+                {hasActions && <ActionMenu posting={p} onMark={onMark} onApply={onApply} />}
               </li>
             ))}
           </ul>
@@ -177,7 +164,7 @@ export function PostingsList({
               <td className="nowrap">{postedLabel(p)}</td>
               {hasActions && (
                 <td>
-                  <Actions posting={p} onMark={onMark} onApply={onApply} />
+                  <ActionMenu posting={p} onMark={onMark} onApply={onApply} />
                 </td>
               )}
             </tr>

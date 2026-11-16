@@ -69,11 +69,13 @@ describe('PostingsList', () => {
     expect(orgs).toEqual(['Alpha', 'Beta']);
   });
 
-  it('calls onMark with the chosen status', () => {
+  it('hides a posting from its actions menu', () => {
     const onMark = vi.fn();
     const p = posting();
     render(<PostingsList postings={[p]} onMark={onMark} />);
-    fireEvent.change(screen.getByLabelText(`Hide ${p.title}`), {target: {value: 'not_interested'}});
+    fireEvent.change(screen.getByLabelText(`Actions for ${p.title}`), {
+      target: {value: 'not_interested'},
+    });
     expect(onMark).toHaveBeenCalledWith(p, 'not_interested');
   });
 });
@@ -87,32 +89,40 @@ function setScreen(narrow: boolean) {
   }));
 }
 
-describe('PostingsList Applied button', () => {
+describe('PostingsList actions menu', () => {
   afterEach(() => setScreen(false));
 
-  it('calls onApply with the posting from the table', () => {
+  it('offers Mark as applied and the hide choices in one menu', () => {
     const onApply = vi.fn();
+    const onMark = vi.fn();
     const p = posting({title: 'Data Engineer'});
-    render(<PostingsList postings={[p]} onApply={onApply} onMark={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', {name: 'Applied to Data Engineer'}));
+    render(<PostingsList postings={[p]} onApply={onApply} onMark={onMark} />);
+    const menu = screen.getByLabelText('Actions for Data Engineer');
+    expect(within(menu).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Actions…',
+      'Mark as applied',
+      'Hide',
+      'Not interested',
+    ]);
+    fireEvent.change(menu, {target: {value: 'applied'}});
     expect(onApply).toHaveBeenCalledWith(p);
-    // The hide menu is still there next to it.
-    expect(screen.getByLabelText('Hide Data Engineer')).toBeTruthy();
+    expect(onMark).not.toHaveBeenCalled();
+    expect((menu as HTMLSelectElement).value).toBe(''); // back to "Actions…"
   });
 
-  it('shows the button on phone-width cards too', () => {
+  it('is the same menu on phone-width cards', () => {
     setScreen(true);
     const onApply = vi.fn();
     const p = posting({title: 'Analyst'});
     render(<PostingsList postings={[p]} onApply={onApply} />);
     expect(screen.queryByRole('table')).toBeNull();
-    fireEvent.click(screen.getByRole('button', {name: 'Applied to Analyst'}));
+    fireEvent.change(screen.getByLabelText('Actions for Analyst'), {target: {value: 'applied'}});
     expect(onApply).toHaveBeenCalledWith(p);
   });
 
   it('has no action column without handlers', () => {
     render(<PostingsList postings={[posting()]} />);
-    expect(screen.queryByRole('button', {name: /^Applied to/})).toBeNull();
+    expect(screen.queryByLabelText(/^Actions for/)).toBeNull();
     expect(screen.getAllByRole('columnheader')).toHaveLength(4);
   });
 });

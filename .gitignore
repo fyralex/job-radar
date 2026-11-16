@@ -2,6 +2,10 @@
 .env
 config/boards.yaml
 data/
+# Database dumps hold personal data (profiles, applications, notes)
+*.sql
+*.sql.gz
+backups/
 
 # Python
 __pycache__/

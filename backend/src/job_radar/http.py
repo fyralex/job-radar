@@ -15,6 +15,9 @@ collection policy in CLAUDE.md on every request:
   shared by every process (`RedisThrottle`); without it, by every thread in
   the process (`HostThrottle`).
 - 429 and 5xx responses are retried with backoff, honouring `Retry-After`.
+- Redirects are followed by hand (never by `requests`), up to
+  `MAX_REDIRECTS`: every hop takes a throttle slot for its own host, and a
+  request's every hop is checked against that host's robots.txt first.
 
 A disallowed path or a blocked request raises `BoardFetchError`; the board is
 then reported as failed. Never work around a block.
@@ -30,7 +33,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from typing import Protocol
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import redis
 import requests
@@ -45,6 +48,9 @@ MIN_INTERVAL_SECONDS = 1.0
 MAX_RETRIES = 3
 MAX_RETRY_AFTER_SECONDS = 60.0
 DEFAULT_TIMEOUT = 30.0
+# RFC 9309 asks crawlers to follow at least five redirects for robots.txt;
+# the same limit applies to ordinary requests.
+MAX_REDIRECTS = 5
 
 
 def user_agent(contact_url: str | None) -> str:
@@ -76,18 +82,17 @@ class RobotsCache:
         session: requests.Session,
         url: str,
         agent: str,
-        throttle: Throttle | None = None,
+        throttle: Throttle,
     ) -> bool:
         """Whether robots.txt lets `agent` fetch `url`. A robots.txt fetch
-        (cold or stale cache) first waits on `throttle`, like any request."""
+        (cold or stale cache) waits on `throttle` for each hop, like any
+        request; `throttle` is required so no caller can skip that."""
         parts = urlsplit(url)
         origin = f"{parts.scheme}://{parts.netloc}"
         with self._lock:
             entry = self._entries.get(origin)
         if entry is None or time.monotonic() - entry.fetched_at > self._ttl:
-            if throttle is not None:
-                throttle.wait(parts.netloc)
-            entry = self._fetch(session, origin, agent)
+            entry = self._fetch(session, origin, agent, throttle)
             with self._lock:
                 self._entries[origin] = entry
         if entry.disallow_all:
@@ -97,18 +102,35 @@ class RobotsCache:
         return entry.parser.can_fetch(agent, url)
 
     @staticmethod
-    def _fetch(session: requests.Session, origin: str, agent: str) -> _Robots:
+    def _fetch(session: requests.Session, origin: str, agent: str, throttle: Throttle) -> _Robots:
         now = time.monotonic()
+        url = f"{origin}/robots.txt"
         try:
-            response = session.get(
-                f"{origin}/robots.txt", headers={"User-Agent": agent}, timeout=DEFAULT_TIMEOUT
-            )
+            for _hop in range(MAX_REDIRECTS + 1):
+                throttle.wait(urlsplit(url).netloc)
+                response = session.get(
+                    url,
+                    headers={"User-Agent": agent},
+                    timeout=DEFAULT_TIMEOUT,
+                    allow_redirects=False,
+                )
+                if not response.is_redirect:
+                    break
+                url = urljoin(url, response.headers["Location"])
+            else:
+                # More redirects than RFC 9309 asks us to follow. The RFC lets
+                # a crawler treat that as "unavailable" (allow all); we take
+                # the cautious reading and stay off the host until the next check.
+                logger.warning("robots.txt for %s redirects too often", origin)
+                return _Robots(None, True, now)
         except requests.RequestException as exc:
             logger.warning("robots.txt unreachable for %s: %s", origin, exc)
             return _Robots(None, True, now)
         if 400 <= response.status_code < 500:
             return _Robots(None, False, now)
-        if response.status_code >= 500:
+        if not 200 <= response.status_code < 300:
+            # 5xx, or a 3xx we can't follow (no Location, 300, 304): treat the
+            # file as unreachable and stay off the host until the next check.
             return _Robots(None, True, now)
         parser = urllib.robotparser.RobotFileParser()
         parser.parse(response.text.splitlines())
@@ -259,8 +281,31 @@ class HttpClient:
         headers: Mapping[str, str] | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> requests.Response:
-        """GET with robots, throttle and retries. Raises BoardFetchError for a
-        disallowed path, a final non-2xx status or a network error."""
+        """GET with robots, throttle, retries and redirects. Raises
+        BoardFetchError for a disallowed path (on any hop), a final non-2xx
+        status, too many redirects or a network error."""
+        for _hop in range(MAX_REDIRECTS + 1):
+            response = self._get_once(url, params, headers, timeout)
+            if not response.is_redirect:
+                if response.status_code >= 300:  # a 3xx we can't follow
+                    raise BoardFetchError(
+                        f"{urlsplit(url).netloc}: HTTP {response.status_code} for {response.url}"
+                    )
+                return response
+            # The target is a new request: robots check and slot on its own host.
+            url = urljoin(response.url, response.headers["Location"])
+            params = None  # already part of the URL that redirected
+        raise BoardFetchError(f"{urlsplit(url).netloc}: more than {MAX_REDIRECTS} redirects")
+
+    def _get_once(
+        self,
+        url: str,
+        params: Mapping[str, str | int] | None,
+        headers: Mapping[str, str] | None,
+        timeout: float,
+    ) -> requests.Response:
+        """One hop: robots check, then the request with its retries, never
+        following a redirect."""
         host = urlsplit(url).netloc
         # robots.txt first: fetching it (if not cached) takes its own throttle
         # slot, so it is never sent back to back with the request below.
@@ -270,7 +315,11 @@ class HttpClient:
             self._throttle.wait(host)
             try:
                 response = self.session.get(
-                    url, params=params, headers=dict(headers or {}), timeout=timeout
+                    url,
+                    params=params,
+                    headers=dict(headers or {}),
+                    timeout=timeout,
+                    allow_redirects=False,
                 )
             except requests.RequestException as exc:
                 raise BoardFetchError(f"{host}: {exc}") from exc

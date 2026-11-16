@@ -304,3 +304,132 @@ def test_cached_disallow_sends_nothing_and_waits_for_nothing() -> None:
     with pytest.raises(BoardFetchError):
         client.get(URL)
     assert events == ["wait api.example.com"]
+
+
+def _logging_client(events: list[str]) -> HttpClient:
+    return HttpClient(robots=RobotsCache(), throttle=EventThrottle(events), sleep=lambda _s: None)
+
+
+@responses.activate
+def test_same_host_redirect_takes_a_slot_per_hop() -> None:
+    events: list[str] = []
+    moved = "https://api.example.com/v2/jobs"
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=301, headers={"Location": "/v2/jobs"})  # relative
+    responses.get(moved, json={"ok": True})
+    client = _logging_client(events)
+    assert client.get_json(URL) == {"ok": True}
+    # robots.txt, the request that redirected, and the target: one slot each.
+    assert events == ["wait api.example.com"] * 3
+    assert [c.request.url for c in responses.calls] == [ROBOTS, URL, moved]
+
+
+@responses.activate
+def test_redirect_to_a_disallowed_host_path_is_never_followed() -> None:
+    events: list[str] = []
+    target = "https://cdn.example.org/private/jobs.json"
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=302, headers={"Location": target})
+    responses.get("https://cdn.example.org/robots.txt", body="User-agent: *\nDisallow: /private\n")
+    target_call = responses.get(target, json={})
+    with pytest.raises(BoardFetchError, match=r"robots\.txt disallows https://cdn\.example\.org"):
+        _logging_client(events).get(URL)
+    assert target_call.call_count == 0
+    # The other host's robots.txt took a slot on that host.
+    assert events == [
+        "wait api.example.com",
+        "wait api.example.com",
+        "wait cdn.example.org",
+    ]
+
+
+@responses.activate
+def test_redirect_loop_stops() -> None:
+    responses.get(ROBOTS, status=404)
+    loop = responses.get(URL, status=307, headers={"Location": URL})
+    with pytest.raises(BoardFetchError, match="more than 5 redirects"):
+        _logging_client([]).get(URL)
+    assert loop.call_count == 6  # the first request and five redirects
+
+
+@responses.activate
+def test_params_are_not_resent_after_a_redirect() -> None:
+    target = "https://api.example.com/v2/jobs?page=1"
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=301, headers={"Location": target})
+    responses.get("https://api.example.com/v2/jobs", json={"ok": True})
+    client = _logging_client([])
+    assert client.get_json(URL, params={"page": 1}) == {"ok": True}
+    assert responses.calls[-1].request.url == target
+
+
+@responses.activate
+def test_robots_txt_redirect_is_followed_with_a_slot_per_hop() -> None:
+    events: list[str] = []
+    elsewhere = "https://static.example.net/robots.txt"
+    responses.get(ROBOTS, status=301, headers={"Location": elsewhere})
+    responses.get(elsewhere, body="User-agent: *\nDisallow: /v1\n")
+    job_call = responses.get(URL, json={})
+    with pytest.raises(BoardFetchError, match=r"robots\.txt disallows"):
+        _logging_client(events).get(URL)
+    assert job_call.call_count == 0  # the redirected file's rules applied
+    assert events == ["wait api.example.com", "wait static.example.net"]
+
+
+@responses.activate
+def test_robots_txt_redirecting_too_often_keeps_us_off_the_host() -> None:
+    responses.get(ROBOTS, status=302, headers={"Location": ROBOTS})
+    job_call = responses.get(URL, json={})
+    with pytest.raises(BoardFetchError, match=r"robots\.txt disallows"):
+        _logging_client([]).get(URL)
+    assert job_call.call_count == 0
+    robots_calls = [c for c in responses.calls if c.request.url == ROBOTS]
+    assert len(robots_calls) == 6
+
+
+@responses.activate
+@pytest.mark.parametrize("status", [300, 304, 302])
+def test_a_3xx_that_cannot_be_followed_fails_the_request(status: int) -> None:
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=status)  # no Location header
+    with pytest.raises(BoardFetchError, match=f"HTTP {status}"):
+        _logging_client([]).get(URL)
+
+
+@responses.activate
+def test_robots_txt_3xx_without_location_keeps_us_off_the_host() -> None:
+    responses.get(ROBOTS, status=302, body="User-agent: *\nAllow: /\n")  # no Location
+    job_call = responses.get(URL, json={})
+    with pytest.raises(BoardFetchError, match=r"robots\.txt disallows"):
+        _logging_client([]).get(URL)
+    assert job_call.call_count == 0
+
+
+@responses.activate
+def test_retry_then_redirect() -> None:
+    events: list[str] = []
+    moved = "https://api.example.com/v2/jobs"
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=503)
+    responses.get(URL, status=301, headers={"Location": moved})
+    responses.get(moved, json={"ok": True})
+    assert _logging_client(events).get_json(URL) == {"ok": True}
+    # robots.txt, the 503, its retry (the 301), and the target: four slots.
+    assert events == ["wait api.example.com"] * 4
+
+
+@responses.activate
+def test_cross_host_redirect_that_robots_txt_allows() -> None:
+    events: list[str] = []
+    target = "https://cdn.example.org/jobs.json"
+    responses.get(ROBOTS, status=404)
+    responses.get(URL, status=302, headers={"Location": target})
+    responses.get("https://cdn.example.org/robots.txt", body="User-agent: *\nDisallow: /private\n")
+    responses.get(target, json={"ok": True})
+    assert _logging_client(events).get_json(URL) == {"ok": True}
+    assert events == [
+        "wait api.example.com",
+        "wait api.example.com",
+        "wait cdn.example.org",
+        "wait cdn.example.org",
+    ]

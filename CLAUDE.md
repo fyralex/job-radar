@@ -111,12 +111,17 @@ modules must use its `HttpClient`, never `requests` directly):
 - robots.txt is checked first, cached 24 hours per host (fetching it takes a
   throttle slot like any request), following RFC 9309:
   a 2xx file is parsed with `urllib.robotparser`, any 4xx means no rules, and a
-  5xx or network error means the host is treated as disallowed. (The stdlib's
+  5xx, a network error or a 3xx that can't be followed means the host is
+  treated as disallowed. (The stdlib's
   own `read()` treats 401/403 as disallow-all; Ashby's API host answers
   robots.txt with 401, and the RFC reading was the owner's call.)
 - At most one request per second per host, shared by every process through
   Redis (`RedisThrottle`; in-process only without Redis). 429 and 5xx are
   retried with backoff, honouring `Retry-After`.
+- Redirects are followed by `HttpClient`, never by `requests`, up to 5 hops.
+  Each hop is checked against its host's robots.txt and takes a throttle slot.
+  A robots.txt that redirects more than 5 times keeps the host off limits
+  until the next check.
 - Only listing metadata is stored: title, organization, location, posted date,
   workplace type, employment type and URL. The dashboard links to the employer
   for the full text. Descriptions are never stored or shown.

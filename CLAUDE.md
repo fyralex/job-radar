@@ -117,6 +117,10 @@ modules must use its `HttpClient`, never `requests` directly):
 - At most one request per second per host, shared by every process through
   Redis (`RedisThrottle`; in-process only without Redis). 429 and 5xx are
   retried with backoff, honouring `Retry-After`.
+- Redirects are followed by `HttpClient`, never by `requests`, up to 5 hops.
+  Each hop is checked against its host's robots.txt and takes a throttle slot.
+  A robots.txt that redirects more than 5 times keeps the host off limits
+  until the next check.
 - Only listing metadata is stored: title, organization, location, posted date,
   workplace type, employment type and URL. The dashboard links to the employer
   for the full text. Descriptions are never stored or shown.

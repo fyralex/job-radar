@@ -46,8 +46,8 @@ location. Then press **Refresh now**, or wait for the scheduled refresh.
 
 `config/boards.example.yaml` holds demo boards, one or more per platform. Put
 your own list in `config/boards.yaml` (git ignores it) and import that, or add
-boards one at a time under **Settings > Boards**, which checks each one with a
-test fetch first.
+boards one at a time under **Settings > Boards**, where **Test fetch** checks
+a board before you add it.
 
 ## Configuration
 

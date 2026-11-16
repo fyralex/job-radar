@@ -1,4 +1,4 @@
-import {useId, useState} from 'react';
+import {useEffect, useId, useRef, useState} from 'react';
 import {MARK_LABELS, type MarkStatus, type Posting} from '../datatypes';
 import {useDisclosure} from '../hooks/useDisclosure';
 import {useMediaQuery} from '../hooks/useMediaQuery';
@@ -30,6 +30,12 @@ function ActionMenu({
 }) {
   const {open, setOpen, root, button, onBlur} = useDisclosure();
   const panelId = useId();
+  const panel = useRef<HTMLDivElement>(null);
+  // The list scrolls in its own box, which clips the panel on the last rows:
+  // scroll just enough to show it when it opens.
+  useEffect(() => {
+    if (open) panel.current?.scrollIntoView({block: 'nearest'});
+  }, [open]);
   const choose = (act: () => void) => {
     setOpen(false);
     act();
@@ -48,9 +54,19 @@ function ActionMenu({
         Actions<span aria-hidden="true"> ▾</span>
       </button>
       {open && (
-        <div id={panelId} className="action-panel" role="group" aria-label={`Actions for ${posting.title}`}>
+        <div
+          id={panelId}
+          ref={panel}
+          className="action-panel"
+          role="group"
+          aria-label={`Actions for ${posting.title}`}
+        >
           {onApply && (
-            <button type="button" onClick={() => choose(() => onApply(posting))}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => choose(() => onApply(posting))}
+            >
               Mark as applied
             </button>
           )}

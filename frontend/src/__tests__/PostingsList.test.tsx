@@ -111,11 +111,31 @@ describe('PostingsList actions menu', () => {
     ]);
     expect(onApply).not.toHaveBeenCalled();
     expect(onMark).not.toHaveBeenCalled();
+    // All three look the same; none is singled out (owner's choice).
+    expect(within(panel).getAllByRole('button').map((b) => b.className)).toEqual([
+      'secondary',
+      'secondary',
+      'secondary',
+    ]);
 
     fireEvent.click(within(panel).getByRole('button', {name: 'Mark as applied'}));
     expect(onApply).toHaveBeenCalledWith(p);
     expect(onMark).not.toHaveBeenCalled();
     expect(screen.queryByRole('group')).toBeNull(); // closes after a choice
+  });
+
+  it('scrolls the panel into view when it opens (the list box clips it on the last rows)', () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      render(<PostingsList postings={[posting({title: 'Last'})]} onApply={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', {name: 'Actions for Last'}));
+      expect(scrollIntoView).toHaveBeenCalledWith({block: 'nearest'});
+      expect(scrollIntoView.mock.contexts[0]).toBe(screen.getByRole('group'));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 
   it('closes on Escape without acting', () => {

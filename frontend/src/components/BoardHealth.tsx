@@ -21,8 +21,10 @@ export function BoardHealth({
                 role="listitem"
                 className={run.status === 'ok' ? 'dot dot-ok' : 'dot dot-error'}
                 title={label}
-                aria-label={label}
-              />
+              >
+                {/* The text inside the dot is what screen readers read. */}
+                <span className="visually-hidden">{label}</span>
+              </span>
             );
           })}
         </span>
@@ -32,7 +34,7 @@ export function BoardHealth({
           failed
         </span>
       ) : board.last_status === 'ok' ? (
-        <span>{`${board.last_count ?? 0} postings`}</span>
+        <span>{`${board.last_count ?? 0} ${board.last_count === 1 ? 'posting' : 'postings'}`}</span>
       ) : (
         <span className="muted">not yet</span>
       )}

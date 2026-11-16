@@ -133,19 +133,23 @@ git pull
 docker compose up -d --build    # database changes apply when the backend starts
 ```
 
-**Roll back** an update that went wrong: restore the backup you took before
-it (the steps above, but leave out the last line, so the backend and worker
-stay stopped). Go on only if it printed "Restored."; otherwise your data is
-untouched, so start the current version again with
-`docker compose start backend worker`. Then go back to the version you were on
-and start it:
+**Roll back** an update that went wrong:
 
-```bash
-git checkout v0.1.0             # the release or commit you were on before
-docker compose up -d --build
-```
+1. Restore the backup you took before the update, using the steps above but
+   leaving out the last line, so the backend and worker stay stopped.
+2. If it printed **"Restored."**, go back to the version you were on and start
+   it:
 
-This leaves git on that release. To update again later, run
+   ```bash
+   git checkout v0.1.0             # the release or commit you were on before
+   docker compose up -d --build
+   ```
+
+3. If it printed anything else, nothing was changed: don't check out the old
+   version. Start the current one again with
+   `docker compose start backend worker` and look into the backup.
+
+After step 2, git stays on that release. To update again later, run
 `git checkout main` before `git pull`.
 
 The data lives in the `pgdata` Docker volume, so it survives restarts and

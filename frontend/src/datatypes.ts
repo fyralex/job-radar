@@ -100,6 +100,16 @@ export interface Board {
   last_status: 'ok' | 'error' | null;
   last_error: string | null;
   last_count: number | null;
+  recent_runs: ScrapeRun[]; // last 5, oldest first
+}
+
+// One board's outcome in one scrape run (GET /api/boards, `recent_runs`).
+export interface ScrapeRun {
+  started_at: string;
+  finished_at: string;
+  status: 'ok' | 'error';
+  count: number | null;
+  error: string | null;
 }
 
 export interface BoardInput {

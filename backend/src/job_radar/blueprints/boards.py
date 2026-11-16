@@ -12,6 +12,7 @@ from job_radar.blueprints._util import json_body
 from job_radar.http import HttpClient
 from job_radar.models import BoardRow
 from job_radar.services.boards_repo import board_json, clean_board_input, list_boards
+from job_radar.services.runs_repo import recent_runs
 from job_radar.services.scraper import fetch_one
 from job_radar.sources import PLATFORMS
 from job_radar.sources.common import Board
@@ -39,7 +40,9 @@ def platforms() -> Any:
 
 @bp.get("/boards")
 def get_boards() -> Any:
-    return jsonify([board_json(b) for b in list_boards(db())])
+    session = db()
+    runs = recent_runs(session)
+    return jsonify([board_json(b, runs.get(b.id, ())) for b in list_boards(session)])
 
 
 @bp.post("/boards/validate")
@@ -99,7 +102,7 @@ def update_board(board_id: int) -> Any:
     except IntegrityError:
         session.rollback()
         abort(409, description="that board is already followed")
-    return jsonify(board_json(row))
+    return jsonify(board_json(row, recent_runs(session, [row.id]).get(row.id, ())))
 
 
 @bp.delete("/boards/<int:board_id>")

@@ -29,6 +29,7 @@ from job_radar.http import HttpClient
 from job_radar.models import BoardRow, utcnow
 from job_radar.services.boards_repo import to_board
 from job_radar.services.postings_repo import upsert_board_postings
+from job_radar.services.runs_repo import prune_runs, record_run
 from job_radar.services.scraper import ClientFactory, fetch_boards
 from job_radar.services.settings_repo import get_settings
 
@@ -114,18 +115,39 @@ def _run_holding_lock(
                 if row is None:  # deleted while the run was in progress
                     continue
                 row.last_scraped_at = now
+                # The board's own fetch times (not the end of the whole run).
+                started = result.started_at or now
+                finished = result.finished_at or now
                 if result.ok:
                     count = upsert_board_postings(session, row.id, result.postings, now)
                     row.last_status, row.last_error, row.last_count = "ok", None, count
                     total += count
+                    record_run(
+                        session,
+                        row.id,
+                        started_at=started,
+                        finished_at=finished,
+                        count=count,
+                        error=None,
+                    )
                 else:
                     failed += 1
-                    row.last_status, row.last_error = "error", (result.error or "")[:2000]
+                    error = (result.error or "unknown error")[:2000]
+                    row.last_status, row.last_error = "error", error
+                    record_run(
+                        session,
+                        row.id,
+                        started_at=started,
+                        finished_at=finished,
+                        count=None,
+                        error=error,
+                    )
                     logger.warning("board %s (%s) failed: %s", row.id, row.org, result.error)
             # A run that fetched nothing (no boards yet, or every board skipped)
             # hasn't really scraped: keep it due so the worker tries again soon.
             if board_ids is None and skipped < len(results):
                 get_settings(session).last_full_scrape_at = now
+            prune_runs(session, now)
         return RunSummary(len(results), failed, total, now, skipped)
     finally:
         locks.release(RUN_LOCK, token)

@@ -170,6 +170,7 @@ backend/src/job_radar/
     work_type.py      onsite / hybrid / remote / unknown
     filters.py        posting_key, PostingView, the dashboard filter pipeline
     applications_repo.py  applications and their status history
+    runs_repo.py      scrape run history per board (kept 30 days)
     boards_repo.py, profiles_repo.py, settings_repo.py, marks_repo.py
   blueprints/         /api/postings, /api/boards, /api/profiles, /api/settings, /api/marks,
                       /api/applications, /api/health
@@ -247,6 +248,9 @@ user's settings, so changing a setting never needs a rescrape.
 
 - `boards`: platform, slug, org, category, options, enabled, and the last
   run's status, error and count.
+- `scrape_runs`: one row per board per run (started, finished, `ok`/`error`,
+  count, error). A board skipped because its lock was held gets no row. Rows
+  older than 30 days are pruned at the end of each run.
 - `postings`: one row per `posting_key`, with `first_seen_at`, `last_seen_at`
   and `closed_at`. A board that fails a run is left untouched, so an outage
   never closes its jobs.
@@ -273,7 +277,7 @@ user's settings, so changing a setting never needs a rescrape.
 | POST | `/api/refresh` | Starts a scrape in the background: 202 `{started: true}`, or 200 `{started: false, reason}` with `already_running` or `unavailable` (lock can't be taken, e.g. Redis down) |
 | POST | `/api/visits` | Records a dashboard visit for the "New" badges |
 | GET | `/api/platforms` | Supported platforms, slug help and options |
-| GET / POST | `/api/boards` | List or follow boards |
+| GET / POST | `/api/boards` | List or follow boards; each board has `recent_runs` (last 5, oldest first) |
 | PATCH / DELETE | `/api/boards/<id>` | Edit or stop following |
 | POST | `/api/boards/validate` | One test fetch, nothing stored |
 | GET / POST | `/api/profiles` | List or add job profiles |
@@ -368,9 +372,10 @@ Milestone `v0.1`, one PR each:
 1. Milestone CI, issue and PR templates.
 2. Applications (done: #2, #8, #9): status pipeline, status history with
    notes, manual entries, and an "Applied" button on postings.
-3. Redis: run and per-board locks and health (#3), a per-host rate limiter
-   shared across processes (#16), and a per-board result cache (#19).
-4. `scrape_runs` history and a health column for boards.
+3. Redis (done: #3, #16): run and per-board locks, health, and a per-host
+   rate limiter shared across processes. A per-board result cache (#19) was
+   dropped: "Refresh now" resets the scrape timer, so it could never be used.
+4. `scrape_runs` history (#4) and a health column for boards (#27).
 5. README with a screenshot, architecture diagram and quick start.
 
 Later: more platforms, one PR each and only after the owner approves the

@@ -46,3 +46,15 @@ def test_scrape_due() -> None:
     assert scrape_due(None, 6, now)
     assert not scrape_due(now - timedelta(hours=5), 6, now)
     assert scrape_due(now - timedelta(hours=6), 6, now)
+
+
+def test_fetch_one_records_its_own_wall_clock_times() -> None:
+    from datetime import UTC, datetime
+
+    from job_radar.services.scraper import fetch_one
+
+    before = datetime.now(UTC)
+    result = fetch_one(Board(key="1", org="X", platform="nope", slug="x"), _client)
+    assert not result.ok  # unknown platform, but timed all the same
+    assert result.started_at is not None and result.finished_at is not None
+    assert before <= result.started_at <= result.finished_at <= datetime.now(UTC)

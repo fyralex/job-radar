@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from job_radar.models import BoardRow
+from job_radar.models import BoardRow, ScrapeRunRow
+from job_radar.services.runs_repo import run_json
 from job_radar.sources import PLATFORMS, get_platform
 from job_radar.sources.common import Board
 from job_radar.sources.options import validate_options
@@ -56,7 +58,8 @@ def list_boards(session: Session) -> list[BoardRow]:
     return list(session.scalars(select(BoardRow).order_by(BoardRow.org, BoardRow.id)))
 
 
-def board_json(row: BoardRow) -> dict[str, Any]:
+def board_json(row: BoardRow, runs: Sequence[ScrapeRunRow] = ()) -> dict[str, Any]:
+    """`runs`: the board's recent runs, oldest first (see runs_repo.recent_runs)."""
     board = to_board(row)
     module = get_platform(row.platform)
     return {
@@ -73,4 +76,5 @@ def board_json(row: BoardRow) -> dict[str, Any]:
         "last_status": row.last_status,
         "last_error": row.last_error,
         "last_count": row.last_count,
+        "recent_runs": [run_json(r) for r in runs],
     }

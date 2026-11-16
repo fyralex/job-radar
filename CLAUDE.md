@@ -108,7 +108,8 @@ it.
 modules must use its `HttpClient`, never `requests` directly):
 - An honest `User-Agent`: `job-radar/<version> (+<CONTACT_URL>)`. If a site
   blocks it, the board is dropped. The client is never disguised.
-- robots.txt is checked first, cached 24 hours per host, following RFC 9309:
+- robots.txt is checked first, cached 24 hours per host (fetching it takes a
+  throttle slot like any request), following RFC 9309:
   a 2xx file is parsed with `urllib.robotparser`, any 4xx means no rules, and a
   5xx or network error means the host is treated as disallowed. (The stdlib's
   own `read()` treats 401/403 as disallow-all; Ashby's API host answers

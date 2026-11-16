@@ -4,6 +4,7 @@ collection policy in CLAUDE.md on every request:
 - An honest User-Agent naming this app and, if `CONTACT_URL` is set, where to
   find it. Never a browser string.
 - robots.txt is checked before every request, cached per host for 24 hours.
+  Fetching robots.txt counts as a request: it waits on the throttle too.
   Fetch rules follow RFC 9309: a 2xx file is parsed with `urllib.robotparser`,
   any 4xx means there are no rules (allow all), and a 5xx or a network error
   means "unreachable", so the whole host is treated as disallowed until the
@@ -70,12 +71,22 @@ class RobotsCache:
         with self._lock:
             self._entries.clear()
 
-    def allowed(self, session: requests.Session, url: str, agent: str) -> bool:
+    def allowed(
+        self,
+        session: requests.Session,
+        url: str,
+        agent: str,
+        throttle: Throttle | None = None,
+    ) -> bool:
+        """Whether robots.txt lets `agent` fetch `url`. A robots.txt fetch
+        (cold or stale cache) first waits on `throttle`, like any request."""
         parts = urlsplit(url)
         origin = f"{parts.scheme}://{parts.netloc}"
         with self._lock:
             entry = self._entries.get(origin)
         if entry is None or time.monotonic() - entry.fetched_at > self._ttl:
+            if throttle is not None:
+                throttle.wait(parts.netloc)
             entry = self._fetch(session, origin, agent)
             with self._lock:
                 self._entries[origin] = entry
@@ -251,12 +262,12 @@ class HttpClient:
         """GET with robots, throttle and retries. Raises BoardFetchError for a
         disallowed path, a final non-2xx status or a network error."""
         host = urlsplit(url).netloc
-        self._throttle.wait(host)
-        if not self._robots.allowed(self.session, url, self.agent):
+        # robots.txt first: fetching it (if not cached) takes its own throttle
+        # slot, so it is never sent back to back with the request below.
+        if not self._robots.allowed(self.session, url, self.agent, self._throttle):
             raise BoardFetchError(f"robots.txt disallows {url}")
         for attempt in range(MAX_RETRIES + 1):
-            if attempt:
-                self._throttle.wait(host)
+            self._throttle.wait(host)
             try:
                 response = self.session.get(
                     url, params=params, headers=dict(headers or {}), timeout=timeout
